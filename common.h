@@ -11,6 +11,8 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <stdint.h>
 
 #include <net/ethernet.h>
+#include <netinet/ip.h>
+#include <sys/socket.h>
 
 
 #ifdef __cplusplus
@@ -58,7 +60,44 @@ struct arpdata
 
 
 
-void printRawEthFrame(const uint8_t* data, size_t count);
+struct ippseudohdr
+{
+    struct sockaddr_storage saddr;
+    struct sockaddr_storage daddr;
+    uint32_t length; // number of TCP/UDP packet octets = TCP/UDP header size + TCP/UDP payload size
+                     //                                 = IP packet size - IP header size (=IHL*4)
+    uint8_t protocol;
+};
+
+/**
+ * @param [out] dst
+ * @param iphdr
+ * @return `dst`
+ */
+struct ippseudohdr* ippseudohdr_init(struct ippseudohdr* dst, const struct iphdr* iphdr);
+
+/**
+ * @param [out] dst
+ * @param saddr `struct in6_addr*` or _tbd ..._
+ * @param daddr `struct in6_addr*` or _tbd ..._
+ * @param protocol Protocol type `IPPROTO_...`
+ * @param length
+ * @return On success `dst` is returned, `NULL` on error
+ */
+struct ippseudohdr* ippseudohdr_init6(struct ippseudohdr* dst, const void* saddr, const void* daddr, uint8_t protocol, uint32_t length);
+
+
+
+uint16_t inet_checksum(const uint8_t* data, size_t count);
+
+void inet_checksum_init(uint32_t* sum);
+void inet_checksum_update(uint32_t* sum, const uint8_t* data, size_t count);
+void inet_checksum_update16h(uint32_t* sum, uint16_t value);
+void inet_checksum_update16n(uint32_t* sum, uint16_t value);
+void inet_checksum_update32h(uint32_t* sum, uint32_t value);
+void inet_checksum_update32n(uint32_t* sum, uint32_t value);
+void inet_checksum_update_ippseudohdr(uint32_t* sum, const struct ippseudohdr* pseudoHdr);
+uint16_t inet_checksum_final(uint32_t* sum);
 
 
 
@@ -74,7 +113,7 @@ void printRawEthFrame(const uint8_t* data, size_t count);
  * @param mac Pointer to a buffer holding the hardware address, must be at least `ETH_ALEN` bytes long
  * @param dst Pointer to a string buffer, wich must be at least `MAC_ADDRSTRLEN` bytes long
  * @param size Size of the buffer pointed to by `dst`
- * @return On success `dst` is returned, `NULL` on error.
+ * @return On success `dst` is returned, `NULL` on error
  */
 char* mactos(const uint8_t* mac, char* dst, size_t size);
 
@@ -82,6 +121,41 @@ char* aftos(int af, char* dst, size_t size);
 char* ethptos(uint16_t proto, char* dst, size_t size);
 char* ipptos(uint16_t proto, char* dst, size_t size);
 char* sockaddrtos(const void* sa, char* dst, size_t size);
+
+
+
+void printEthHeader(const uint8_t* data, size_t size);
+void printEthPacket(const uint8_t* data, size_t size);
+void printIpHeader(const uint8_t* data, size_t size);
+void printIpPacket(const uint8_t* data, size_t size);
+
+/**
+ * @param data
+ * @param size
+ * @param pseudoHdr _optional_
+ */
+void printTcpHeader(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr);
+
+/**
+ * @param data
+ * @param size
+ * @param pseudoHdr _optional_
+ */
+void printTcpPacket(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr);
+
+/**
+ * @param data
+ * @param size
+ * @param pseudoHdr _optional_
+ */
+void printUdpHeader(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr);
+
+/**
+ * @param data
+ * @param size
+ * @param pseudoHdr _optional_
+ */
+void printUdpPacket(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr);
 
 
 

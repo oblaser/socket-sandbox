@@ -31,11 +31,152 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <unistd.h>
 
 
+#define SGR_BLACK           "\033[30m"
+#define SGR_RED             "\033[31m"
+#define SGR_GREEN           "\033[32m"
+#define SGR_YELLOW          "\033[33m"
+#define SGR_BLUE            "\033[34m"
+#define SGR_MAGENTA         "\033[35m"
+#define SGR_CYAN            "\033[36m"
+#define SGR_WHITE           "\033[37m"
+#define SGR_RGB(_r, _g, _b) "\033[38;2;" #_r ";" #_g ";" #_b "m"
+#define SGR_DEFAULT         "\033[39m"
+#define SGR_BBLACK          "\033[90m"
+#define SGR_BRED            "\033[91m"
+#define SGR_BGREEN          "\033[92m"
+#define SGR_BYELLOW         "\033[93m"
+#define SGR_BBLUE           "\033[94m"
+#define SGR_BMAGENTA        "\033[95m"
+#define SGR_BCYAN           "\033[96m"
+#define SGR_BWHITE          "\033[97m"
+
+#define SGR_ETH     SGR_DEFAULT
+#define SGR_ARP     SGR_RGB(244, 221, 153)
+#define SGR_IPv4    SGR_DEFAULT
+#define SGR_ICMP    SGR_DEFAULT
+#define SGR_TCP     SGR_RGB(255, 194, 255)
+#define SGR_UDP     SGR_RGB(156, 227, 255)
+#define SGR_PADDING SGR_BBLACK
+
 
 #define SWITCH_CASE_STRCPY_DEFINE(_dst, _define, _off)    \
     case _define:                                         \
         strcpy((_dst), (const char*)(#_define) + (_off)); \
         break
+
+
+
+struct ippseudohdr* ippseudohdr_init(struct ippseudohdr* dst, const struct iphdr* iphdr)
+{
+    struct sockaddr_in* dst_saddr = (struct sockaddr_in*)(&(dst->saddr));
+    dst_saddr->sin_family = AF_INET;
+    dst_saddr->sin_port = 0;
+    dst_saddr->sin_addr.s_addr = iphdr->saddr;
+
+    struct sockaddr_in* dst_daddr = (struct sockaddr_in*)(&(dst->daddr));
+    dst_daddr->sin_family = AF_INET;
+    dst_daddr->sin_port = 0;
+    dst_daddr->sin_addr.s_addr = iphdr->daddr;
+
+    dst->protocol = iphdr->protocol;
+
+    dst->length = iphdr->tot_len - ((uint16_t)(iphdr->ihl) * 4);
+
+    return dst;
+}
+
+struct ippseudohdr* ippseudohdr_init6(struct ippseudohdr* dst, const void* saddr, const void* daddr, uint8_t protocol, uint32_t length)
+{
+    fprintf(stderr, SGR_BRED "error:" SGR_DEFAULT " %s is not yet implemented", __func__);
+    return NULL;
+}
+
+
+
+uint16_t inet_checksum(const uint8_t* data, size_t count)
+{
+    uint32_t sum = 0;
+
+    while (count > 1)
+    {
+        sum += (((uint16_t)(*data) << 8) | (uint16_t)(*(data + 1)));
+
+        data += 2;
+        count -= 2;
+    }
+
+    if (count > 0) { sum += (uint32_t)(*data) << 8; }
+
+    sum = (sum & 0x0000FFFF) + (sum >> 16);
+
+    return (uint16_t)(~sum);
+}
+
+void inet_checksum_init(uint32_t* sum) { *sum = 0; }
+
+void inet_checksum_update(uint32_t* sum, const uint8_t* data, size_t count)
+{
+    while (count > 1)
+    {
+        *sum += (((uint16_t)(*data) << 8) | (uint16_t)(*(data + 1)));
+
+        data += 2;
+        count -= 2;
+    }
+
+    if (count > 0) { *sum += (uint32_t)(*data) << 8; }
+}
+
+void inet_checksum_update16h(uint32_t* sum, uint16_t value) { *sum += value; }
+void inet_checksum_update16n(uint32_t* sum, uint16_t value) { *sum += ntohs(value); }
+void inet_checksum_update32h(uint32_t* sum, uint32_t value) { *sum += (value >> 16) + (value & 0x0000FFFF); }
+void inet_checksum_update32n(uint32_t* sum, uint32_t value) { inet_checksum_update32h(sum, ntohl(value)); }
+
+void inet_checksum_update_ippseudohdr(uint32_t* sum, const struct ippseudohdr* pseudoHdr)
+{
+    const int af = pseudoHdr->saddr.ss_family;
+
+    switch (af)
+    {
+    case AF_INET:
+    {
+        const struct sockaddr_in* saddr = (struct sockaddr_in*)(&(pseudoHdr->saddr));
+        const struct sockaddr_in* daddr = (struct sockaddr_in*)(&(pseudoHdr->daddr));
+
+        inet_checksum_update32n(sum, saddr->sin_addr.s_addr);
+        inet_checksum_update32n(sum, daddr->sin_addr.s_addr);
+        inet_checksum_update16h(sum, (uint16_t)(pseudoHdr->protocol));
+        inet_checksum_update16h(sum, (uint16_t)(pseudoHdr->length));
+    }
+    break;
+
+    case AF_INET6:
+    {
+        const struct sockaddr_in6* saddr = (struct sockaddr_in6*)(&(pseudoHdr->saddr));
+        const struct sockaddr_in6* daddr = (struct sockaddr_in6*)(&(pseudoHdr->daddr));
+
+        fprintf(stderr, SGR_BRED "error:" SGR_DEFAULT " %s does not yet support IPv6", __func__);
+        (void)saddr;
+        (void)daddr;
+        inet_checksum_update32h(sum, pseudoHdr->length);
+        inet_checksum_update16h(sum, (uint16_t)(pseudoHdr->protocol));
+    }
+    break;
+
+    default:
+    {
+        char buffer[AF_STRLEN];
+        fprintf(stderr, SGR_BRED "error:" SGR_DEFAULT " %s does not support %s", __func__, aftos(af, buffer, sizeof(buffer)));
+    }
+    break;
+    }
+}
+
+uint16_t inet_checksum_final(uint32_t* sum)
+{
+    *sum = ~((*sum & 0x0000FFFF) + (*sum >> 16));
+    return (uint16_t)(*sum);
+}
 
 
 
@@ -177,8 +318,11 @@ char* ipptos(uint16_t proto, char* dst, size_t size)
         default:
         {
             _Static_assert(IPPROTO_STRLEN >= 15, "increase IPPROTO_STRLEN");
+            const char* format;
+            if (proto <= 0x00FF) { format = "IPPROTO_#%02xh"; }
+            else { format = "IPPROTO_#%04xh"; }
 
-            const size_t res = (size_t)snprintf(dst, size, "IPPROTO_#%04xh", (int)proto);
+            const size_t res = (size_t)snprintf(dst, size, format, (int)proto);
             if (res >= size) { r = NULL; }
         }
         break;
@@ -271,6 +415,388 @@ char* sockaddrtos(const void* sa, char* dst, size_t size)
 
 
 
+static void printPacket_padding(const uint8_t* data, size_t size)
+{
+    // hex dump padding if it's not 0
+    for (size_t i = 0; i < size; ++i)
+    {
+        if (data[i])
+        {
+            printf("\n" SGR_PADDING "Padding:\n");
+            hexDump(data, size);
+            printf(SGR_DEFAULT);
+            fflush(stdout);
+            break;
+        }
+    }
+}
+
+void printEthHeader(const uint8_t* data, size_t size)
+{
+    const struct ethhdr* const ethHeader = (const struct ethhdr*)(data);
+    const uint8_t* ethSrc = ethHeader->h_source;
+    const uint8_t* ethDst = ethHeader->h_dest;
+    uint16_t ethProtocol = ntohs(ethHeader->h_proto);
+    const size_t ethHeaderSize = ((ethProtocol == ETH_P_8021Q) ? (ETH_HLEN + 4) : (ETH_HLEN));
+    __attribute__((unused)) const uint8_t* const ethData = data + ethHeaderSize;
+    __attribute__((unused)) const size_t ethDataSize = size - ethHeaderSize;
+
+    char buffer[100];
+
+    printf(SGR_ETH);
+
+    printf("Ethernet\n");
+    printf("  src   %s\n", mactos(ethSrc, buffer, sizeof(buffer)));
+    printf("  dst   %s\n", mactos(ethDst, buffer, sizeof(buffer)));
+
+    if (ethProtocol == ETH_P_8021Q) // not tested
+    {
+        const struct ethhdr8021Q* const ethHeader = (const struct ethhdr8021Q*)(data);
+        const uint16_t ethVlanTpid = ntohs(ethHeader->ehq_tpid); // Tag Protocol Identifier
+        const uint16_t ethVlanTci = ntohs(ethHeader->ehq_tci);   // Tag Control Information
+        const int ethVlanPcp = ethVlanTci >> 13;                 // Priority Code Point
+        const int ethVlanDei = (ethVlanTci >> 12) & 0x01;        // Drop Eligible Indicator
+        const int ethVlanVid = ethVlanTci & 0x0FFF;              // VLAN-Identifier
+        ethProtocol = ntohs(ethHeader->ehq_proto);
+
+        printf("  802.1Q VLAN Extended Header (0x%04x)\n", (int)ethVlanTpid);
+        printf("    PCP %i", ethVlanPcp);
+        printf("    DEI %i", ethVlanDei);
+        printf("    VID %i", ethVlanVid);
+    }
+
+    printf("  proto 0x%04x %s\n", (int)ethProtocol, ethptos(ethProtocol, buffer, sizeof(buffer)));
+    printf("  hdr size  %zu\n", ethHeaderSize);
+    printf("  data size %zu\n", ethDataSize);
+
+    hexDump((const uint8_t*)ethHeader, ethHeaderSize);
+
+    printf(SGR_DEFAULT);
+    fflush(stdout);
+}
+
+void printEthPacket(const uint8_t* data, size_t size)
+{
+    printEthHeader(data, size);
+    printf("\n");
+
+    const struct ethhdr* const ethHeader = (const struct ethhdr*)(data);
+    uint16_t ethProtocol = ntohs(ethHeader->h_proto);
+    const size_t ethHeaderSize = ((ethProtocol == ETH_P_8021Q) ? (ETH_HLEN + 4) : (ETH_HLEN));
+    const uint8_t* const ethData = data + ethHeaderSize;
+    const size_t ethDataSize = size - ethHeaderSize;
+
+    if (ethProtocol == ETH_P_IP) { printIpPacket(ethData, ethDataSize); }
+    else if (ethProtocol == ETH_P_ARP)
+    {
+        const struct arphdr* const arpHeader = (const struct arphdr*)(ethData);
+        const size_t arpHeaderSize = 8;
+        const uint16_t arpHwType = ntohs(arpHeader->ar_hrd);
+        const uint16_t arpProtocol = ntohs(arpHeader->ar_pro);
+        const uint8_t arpHwLength = arpHeader->ar_hln;
+        const uint8_t arpProtoLen = arpHeader->ar_pln;
+        const uint16_t arpOperation = ntohs(arpHeader->ar_op);
+        const uint8_t* const arpData = ethData + arpHeaderSize;
+        const size_t arpDataSize = 2 * arpHwLength + 2 * arpProtoLen;
+        const uint8_t* const padData = ethData + arpHeaderSize + arpDataSize; // padding
+        const size_t padDataSize = ethDataSize - arpHeaderSize - arpDataSize; // padding
+
+        char buffer[100];
+
+        printf(SGR_ARP);
+
+        printf("ARP\n");
+        printf("  hw type   %i %s\n", (int)arpHwType, (arpHwType == ARPHRD_ETHER ? "ETH" : ""));
+        printf("  proto     0x%04x %s\n", (int)arpProtocol, ethptos(arpProtocol, buffer, sizeof(buffer)));
+        printf("  hw length %i\n", (int)arpHwLength);
+        printf("  proto len %i\n", (int)arpProtoLen);
+        printf("  operation %i %s\n", (int)arpOperation, (arpOperation == 1 ? "request" : (arpOperation == 2 ? "reply" : "")));
+        printf("  hdr size  %zu\n", arpHeaderSize);
+        printf("  data size %zu\n", arpDataSize);
+
+        hexDump((const uint8_t*)arpHeader, arpHeaderSize);
+        printf("\n");
+
+        if ((arpHwType == ARPHRD_ETHER) && (arpProtocol == ETH_P_IP) && (arpHwLength == ARPDATA_HLEN) && (arpProtoLen == ARPDATA_PLEN))
+        {
+            const struct arpdata* const arpdata = (const struct arpdata*)(arpData);
+            const uint8_t* sMac = arpdata->ar_sha;
+            const uint8_t* tMac = arpdata->ar_tha;
+
+            char buffer[100];
+
+            printf("  sender MAC   %s\n", mactos(sMac, buffer, sizeof(buffer)));
+            printf("  sender addr  %s\n", inet_ntop(AF_INET, &(arpdata->ar_spa), buffer, sizeof(buffer)));
+            printf("  target MAC   %s\n", mactos(tMac, buffer, sizeof(buffer)));
+            printf("  target addr  %s\n", inet_ntop(AF_INET, &(arpdata->ar_tpa), buffer, sizeof(buffer)));
+
+            hexDump(arpData, arpDataSize);
+        }
+        else { hexDump(arpData, arpDataSize); }
+
+        printf(SGR_DEFAULT);
+        fflush(stdout);
+
+        printPacket_padding(padData, padDataSize);
+    }
+    else
+    {
+        char buffer[100];
+
+        printf(SGR_ETH);
+
+        printf("\nEtherType 0x%04x %s\n", (int)ethProtocol, ethptos(ethProtocol, buffer, sizeof(buffer)));
+        hexDump(ethData, ethDataSize);
+
+        printf(SGR_DEFAULT);
+        fflush(stdout);
+    }
+}
+
+void printIpHeader(const uint8_t* data, size_t size)
+{
+    const struct iphdr* const ipHeader = (const struct iphdr*)(data + 0);
+    const uint8_t ipVersion = ipHeader->version;
+    const uint8_t ipIhl = ipHeader->ihl;
+    const size_t ipHeaderSize = ipIhl * 4u;
+    const uint8_t ipTos = ipHeader->tos;
+    const uint16_t ipTotalLen = ntohs(ipHeader->tot_len);
+    const uint16_t ipId = ntohs(ipHeader->id);
+    const uint8_t ipFlags = (uint8_t)(ntohs(ipHeader->frag_off) >> 13);
+    const uint16_t ipFragOff = (ntohs(ipHeader->frag_off) & 0x1FFF);
+    const uint8_t ipTtl = ipHeader->ttl;
+    const uint8_t ipProtocol = ipHeader->protocol;
+    const uint16_t ipCheck = ntohs(ipHeader->check);
+    const uint32_t srcIp = ntohl(ipHeader->saddr);
+    const uint32_t dstIp = ntohl(ipHeader->daddr);
+    __attribute__((unused)) const uint8_t* const ipData = data + ipHeaderSize;
+    __attribute__((unused)) const size_t ipDataSize = size - ipHeaderSize;
+
+    const uint16_t ipCheckCalc = inet_checksum(data, ipHeaderSize);
+
+    char buffer[100];
+
+    printf(SGR_IPv4);
+
+    printf("IPv4\n");
+    printf("  version   %i\n", (int)ipVersion);
+    printf("  IHL       %i\n", (int)ipIhl);
+    printf("  ToS       0x%02x\n", (int)ipTos);
+    printf("  total len %i\n", (int)ipTotalLen);
+    printf("  ID        %i\n", (int)ipId);
+    printf("  flags     0x%02x\n", (int)ipFlags);
+    printf("  frag off  %i\n", (int)ipFragOff);
+    printf("  TTL       %i\n", (int)ipTtl);
+    printf("  protocol  %02x %s\n", ipProtocol, ipptos(ipProtocol, buffer, sizeof(buffer)));
+    printf("  check     %s0x%04x" SGR_IPv4 "\n", ((ipCheckCalc == 0) ? "" : SGR_RED), (int)ipCheck);
+    printf("  src addr  %15s = 0x%08x\n", inet_ntop(AF_INET, &(ipHeader->saddr), buffer, sizeof(buffer)), srcIp);
+    printf("  dst addr  %15s = 0x%08x\n", inet_ntop(AF_INET, &(ipHeader->daddr), buffer, sizeof(buffer)), dstIp);
+    printf("  hdr size  %zu\n", ipHeaderSize);
+    printf("  data size %zu\n", ipDataSize);
+
+    hexDump((const uint8_t*)ipHeader, ipHeaderSize);
+
+    printf(SGR_DEFAULT);
+    fflush(stdout);
+}
+
+void printIpPacket(const uint8_t* data, size_t size)
+{
+    printIpHeader(data, size);
+    printf("\n");
+
+    const struct iphdr* const ipHeader = (const struct iphdr*)(data);
+    const uint8_t ipIhl = ipHeader->ihl;
+    const size_t ipHeaderSize = ipIhl * 4u;
+    const uint8_t ipProtocol = ipHeader->protocol;
+    const uint8_t* const ipData = data + ipHeaderSize;
+    const size_t ipDataSize = size - ipHeaderSize;
+
+    struct ippseudohdr pseudoHdr;
+    ippseudohdr_init(&pseudoHdr, ipHeader);
+
+
+
+    if (ipProtocol == IPPROTO_TCP) { printTcpPacket(ipData, ipDataSize, &pseudoHdr); }
+    else if (ipProtocol == IPPROTO_UDP) { printUdpPacket(ipData, ipDataSize, &pseudoHdr); }
+    else if (ipProtocol == IPPROTO_ICMP)
+    {
+        const struct icmphdr* const icmpHeader = (const struct icmphdr*)(ipData);
+        const size_t icmpHeaderSize = 8;
+        const uint8_t* const icmpData = ipData + icmpHeaderSize;
+        const size_t icmpDataSize = ipDataSize - icmpHeaderSize;
+        const uint8_t icmpType = icmpHeader->type;
+        const uint8_t icmpCode = icmpHeader->code;
+        const uint16_t icmpCheck = ntohs(icmpHeader->checksum);
+        // ...
+
+        const uint16_t icmpCheckCalc = inet_checksum(ipData, icmpHeaderSize + icmpDataSize);
+
+        printf(SGR_ICMP);
+
+        printf("ICMP\n");
+        printf("  type      %i\n", (int)icmpType);
+        printf("  code      %i\n", (int)icmpCode);
+        printf("  check     %s0x%04x" SGR_ICMP "\n", ((icmpCheckCalc == 0) ? "" : SGR_RED), (int)icmpCheck);
+        printf("  hdr size  %zu\n", icmpHeaderSize);
+        printf("  data size %zu\n", icmpDataSize);
+
+        hexDump((const uint8_t*)icmpHeader, icmpHeaderSize);
+
+        printf("\n");
+
+        hexDump(icmpData, icmpDataSize);
+
+        printf(SGR_DEFAULT);
+        fflush(stdout);
+    }
+    else
+    {
+        char buffer[100];
+
+        printf(SGR_IPv4);
+
+        printf("IP %s\n", ipptos(ipProtocol, buffer, sizeof(buffer)));
+        hexDump(ipData, ipDataSize);
+
+        printf(SGR_DEFAULT);
+        fflush(stdout);
+    }
+}
+
+void printTcpHeader(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr)
+{
+    const struct tcphdr* const tcpHeader = (const struct tcphdr*)(data);
+    const uint16_t srcPort = ntohs(tcpHeader->th_sport);
+    const uint16_t dstPort = ntohs(tcpHeader->th_dport);
+    const uint32_t tcpSeq = ntohl(tcpHeader->th_seq);
+    // ...
+    const uint8_t tcpDataOff = tcpHeader->th_off;
+    const size_t tcpHeaderSize = tcpDataOff * 4u;
+    const uint8_t tcpFlags = tcpHeader->th_flags;
+    // ...
+    const uint16_t tcpCheck = ntohs(tcpHeader->check);
+    // ...
+    __attribute__((unused)) const uint8_t* const tcpData = data + tcpHeaderSize;
+    __attribute__((unused)) const size_t tcpDataSize = size - tcpHeaderSize;
+    __attribute__((unused)) const uint8_t* const padData = data + tcpHeaderSize + tcpDataSize; // potential padding
+    __attribute__((unused)) const size_t padDataSize = size - tcpHeaderSize - tcpDataSize;     // potential padding
+
+    uint16_t tcpCheckCalc;
+    if (pseudoHdr)
+    {
+        uint32_t sum;
+        inet_checksum_init(&sum);
+        inet_checksum_update_ippseudohdr(&sum, pseudoHdr);
+        inet_checksum_update(&sum, data, pseudoHdr->length);
+        tcpCheckCalc = inet_checksum_final(&sum);
+    }
+
+    printf(SGR_TCP);
+
+    printf("TCP\n");
+    printf("  src port  %i\n", (int)srcPort);
+    printf("  dst port  %i\n", (int)dstPort);
+    printf("  sequence  %u\n", tcpSeq);
+    printf("  data off  %i\n", (int)tcpDataOff);
+    printf("  flags     0x%02x\n", (int)tcpFlags);
+    printf("  check     %s0x%04x" SGR_TCP "\n", ((tcpCheckCalc == 0) || (!pseudoHdr) ? "" : SGR_RED), (int)tcpCheck);
+    printf("  hdr size  %zu\n", tcpHeaderSize);
+    printf("  data size %zu\n", tcpDataSize);
+
+    hexDump((const uint8_t*)tcpHeader, tcpHeaderSize);
+
+    printf(SGR_DEFAULT);
+    fflush(stdout);
+}
+
+void printTcpPacket(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr)
+{
+    printTcpHeader(data, size, pseudoHdr);
+    printf("\n");
+
+    const struct tcphdr* const tcpHeader = (const struct tcphdr*)(data);
+    const uint8_t tcpDataOff = tcpHeader->th_off;
+    const size_t tcpHeaderSize = tcpDataOff * 4u;
+    const uint8_t* const tcpData = data + tcpHeaderSize;
+    const size_t tcpDataSize = size - tcpHeaderSize;
+    const uint8_t* const padData = data + tcpHeaderSize + tcpDataSize; // potential padding
+    const size_t padDataSize = size - tcpHeaderSize - tcpDataSize;     // potential padding
+
+    printf(SGR_TCP);
+
+    hexDump(tcpData, tcpDataSize);
+
+    printf(SGR_DEFAULT);
+    fflush(stdout);
+
+    printPacket_padding(padData, padDataSize);
+}
+
+void printUdpHeader(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr)
+{
+    const struct udphdr* const udpHeader = (const struct udphdr*)(data);
+    const size_t udpHeaderSize = 8;
+    const uint16_t srcPort = ntohs(udpHeader->uh_sport);
+    const uint16_t dstPort = ntohs(udpHeader->uh_dport);
+    const uint16_t udpLength = ntohs(udpHeader->uh_ulen);
+    const uint16_t udpCheck = ntohs(udpHeader->uh_sum);
+    __attribute__((unused)) const uint8_t* const udpData = data + udpHeaderSize;
+    __attribute__((unused)) const size_t udpDataSize = udpLength - udpHeaderSize;
+    __attribute__((unused)) const uint8_t* const padData = data + udpHeaderSize + udpDataSize; // potential padding
+    __attribute__((unused)) const size_t padDataSize = size - udpHeaderSize - udpDataSize;     // potential padding
+
+    uint16_t udpCheckCalc;
+    if (pseudoHdr)
+    {
+        uint32_t sum;
+        inet_checksum_init(&sum);
+        inet_checksum_update_ippseudohdr(&sum, pseudoHdr);
+        inet_checksum_update(&sum, data, pseudoHdr->length);
+        udpCheckCalc = inet_checksum_final(&sum);
+    }
+
+    printf(SGR_UDP);
+
+    printf("UDP\n");
+    printf("  src port  %i\n", (int)srcPort);
+    printf("  dst port  %i\n", (int)dstPort);
+    printf("  length    %i\n", (int)udpLength);
+    printf("  check     %s0x%04x" SGR_UDP "\n", ((udpCheckCalc == 0) || (udpCheck == 0) || (!pseudoHdr) ? "" : SGR_RED), (int)udpCheck);
+    printf("  hdr size  %zu\n", udpHeaderSize);
+    printf("  data size %zu + %zu pad\n", udpDataSize, padDataSize);
+
+    hexDump((const uint8_t*)udpHeader, udpHeaderSize);
+
+    printf(SGR_DEFAULT);
+    fflush(stdout);
+}
+
+void printUdpPacket(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr)
+{
+    printUdpHeader(data, size, pseudoHdr);
+    printf("\n");
+
+    const struct udphdr* const udpHeader = (const struct udphdr*)(data);
+    const size_t udpHeaderSize = 8;
+    const uint16_t udpLength = ntohs(udpHeader->uh_ulen);
+    const uint8_t* const udpData = data + udpHeaderSize;
+    const size_t udpDataSize = udpLength - udpHeaderSize;
+    const uint8_t* const padData = data + udpHeaderSize + udpDataSize; // potential padding
+    const size_t padDataSize = size - udpHeaderSize - udpDataSize;     // potential padding
+
+    printf(SGR_UDP);
+
+    hexDump(udpData, udpDataSize);
+
+    printf(SGR_DEFAULT);
+    fflush(stdout);
+
+    printPacket_padding(padData, padDataSize);
+}
+
+
+
 /**
  * @brief Converts the data buffer bytes to printable characters.
  *
@@ -349,27 +875,96 @@ void hexDump(const uint8_t* data, size_t count)
     printf("\n");
 }
 
+
+
 void COMMON_test_unit_system()
 {
-    char buffer[100];
+    char __attribute__((unused)) buffer[100];
+
+    const uint8_t __attribute__((unused)) ETH_ARP_request[] = {
+        0xdc, 0x2c, 0x6e, 0x11, 0x22, 0x33, 0x34, 0x97, 0xf6, 0xdd, 0xee, 0xff, 0x08, 0x06, 0x00, 0x01, 0x08, 0x00, 0x06, 0x04, 0x00,
+        0x01, 0x34, 0x97, 0xf6, 0xdd, 0xee, 0xff, 0xc0, 0xa8, 0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0xa8, 0x01, 0x01,
+    };
+
+    const uint8_t __attribute__((unused)) ETH_ICMP_echo_request[] = {
+        0xdc, 0x2c, 0x6e, 0x11, 0x22, 0x33, 0x34, 0x97, 0xf6, 0xdd, 0xee, 0xff, 0x08, 0x00, 0x45, 0x00, 0x00, 0x54, 0xf9, 0x8f, 0x40, 0x00, 0x40, 0x01, 0xa7,
+        0x3e, 0xc0, 0xa8, 0x01, 0x08, 0xbc, 0x28, 0x1c, 0x02, 0x08, 0x00, 0xa8, 0x3d, 0x35, 0x2a, 0x00, 0x03, 0xcb, 0xad, 0xfb, 0x67, 0x00, 0x00, 0x00, 0x00,
+        0x8f, 0xac, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20,
+        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    };
+
+    const uint8_t __attribute__((unused)) ETH_ICMP_echo_reply[] = {
+        0x34, 0x97, 0xf6, 0xdd, 0xee, 0xff, 0xdc, 0x2c, 0x6e, 0x11, 0x22, 0x33, 0x08, 0x00, 0x45, 0x00, 0x00, 0x54, 0xe8, 0x8f, 0x00, 0x00, 0x31, 0x01, 0x07,
+        0x3f, 0xbc, 0x28, 0x1c, 0x02, 0xc0, 0xa8, 0x01, 0x08, 0x00, 0x00, 0xb0, 0x3d, 0x35, 0x2a, 0x00, 0x03, 0xcb, 0xad, 0xfb, 0x67, 0x00, 0x00, 0x00, 0x00,
+        0x8f, 0xac, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20,
+        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    };
+
+    const uint8_t __attribute__((unused)) TCP_csTest[] = {
+        0x11, 0x5c, 0xdc, 0xba, 0x28, 0xd5, 0x41, 0xda, 0x64, 0xe8, 0x6a, 0x10, 0x80, 0x18, 0x01, 0xfe, 0x00, 0x00, 0x00,
+        0x00, 0x01, 0x01, 0x08, 0x0a, 0x5c, 0x86, 0xc6, 0xf8, 0xbd, 0x62, 0xe3, 0x6f, 0x6c, 0x69, 0x64, 0x6f, 0x72, 0x0a,
+    };
 
 #if 1
-    printf("\n\033[97m%s\033[39m\n", "mactos");
+    printf("\n" SGR_BWHITE "%s" SGR_DEFAULT "\n", "inet_checksum");
+
+    {
+        const uint8_t ipPseudoHeader[] = { 0xc0, 0xa8, 0xae, 0x80, 0xc0, 0xa8, 0xae, 0x01, 0x00, 0x06, 0x00, 0x26 };
+        const uint16_t crcExpected = 0x67ea;
+        uint32_t sum;
+
+        inet_checksum_init(&sum);
+        inet_checksum_update(&sum, ipPseudoHeader, sizeof(ipPseudoHeader));
+        inet_checksum_update(&sum, TCP_csTest, sizeof(TCP_csTest));
+        const uint16_t crcCalc_buffer = inet_checksum_final(&sum);
+
+        inet_checksum_init(&sum);
+        inet_checksum_update32h(&sum, 0xc0a8ae80);
+        inet_checksum_update32h(&sum, 0xc0a8ae01);
+        inet_checksum_update16h(&sum, IPPROTO_TCP);
+        inet_checksum_update16h(&sum, sizeof(TCP_csTest));
+        inet_checksum_update(&sum, TCP_csTest, sizeof(TCP_csTest));
+        const uint16_t crcCalc_val = inet_checksum_final(&sum);
+
+        struct ippseudohdr ippseudohdr;
+        struct iphdr iphdr;
+        inet_pton(AF_INET, "192.168.174.128", &(iphdr.saddr));
+        inet_pton(AF_INET, "192.168.174.1", &(iphdr.daddr));
+        iphdr.ihl = 5;
+        iphdr.tot_len = (uint16_t)(iphdr.ihl) * 4 + sizeof(TCP_csTest);
+        iphdr.protocol = IPPROTO_TCP;
+
+        inet_checksum_init(&sum);
+        inet_checksum_update_ippseudohdr(&sum, ippseudohdr_init(&ippseudohdr, &iphdr));
+        inet_checksum_update(&sum, TCP_csTest, sizeof(TCP_csTest));
+        const uint16_t crcCalc_psh = inet_checksum_final(&sum);
+
+        if ((crcCalc_buffer != crcExpected) || (crcCalc_val != crcExpected) || (crcCalc_psh != crcExpected))
+        {
+            printf("b 0x%04x, v 0x%04x, p 0x%04x, e 0x%04x", crcCalc_buffer, crcCalc_val, crcCalc_psh, crcExpected);
+        }
+        else { printf("OK\n"); }
+    }
+#endif
+
+#if 1
+    printf("\n" SGR_BWHITE "%s" SGR_DEFAULT "\n", "mactos");
 
     const uint8_t mac[6] = { 0xb8, 0x27, 0xeb, 0x00, 0x0a, 0x12 };
     printf("MAC address: %s\n", mactos(mac, buffer, sizeof(buffer)));
 #endif
 
-#if 0
-    printf("\n\033[97m%s\033[39m\n", "ethptos");
+#if 1
+    printf("\n" SGR_BWHITE "%s" SGR_DEFAULT "\n", "ethptos");
     printf("ETH proto: %s\n", ethptos(ETH_P_LOOP, buffer, sizeof(buffer)));
     printf("ETH proto: %s\n", ethptos(ETH_P_IP, buffer, sizeof(buffer)));
     printf("ETH proto: %s\n", ethptos(ETH_P_X25, buffer, sizeof(buffer)));
+    printf("ETH proto: %s\n", ethptos(ETH_P_IPV6, buffer, sizeof(buffer)));
     printf("ETH proto: %s\n", ethptos(1234, buffer, sizeof(buffer)));
 #endif
 
 #if 1
-    printf("\n\033[97m%s\033[39m\n", "sockaddrtos");
+    printf("\n" SGR_BWHITE "%s" SGR_DEFAULT "\n", "sockaddrtos");
 
     struct sockaddr_in sa;
     memset(&sa, 0, sizeof(struct sockaddr_in));
@@ -390,15 +985,31 @@ void COMMON_test_unit_system()
     printf("sockaddr: %s\n", sockaddrtos(&sa, buffer, sizeof(buffer)));
 
     sa.sin_family = AF_INET6;
-    printf("sockaddr: %s (kind of random)\n", sockaddrtos(&sa, buffer, sizeof(buffer)));
+    printf("sockaddr: %s (sockaddr_in with AF_INET6)\n", sockaddrtos(&sa, buffer, sizeof(buffer)));
 
     memset(&sa, 0xFF, sizeof(struct sockaddr_in));
     sa.sin_family = AF_INET6;
-    printf("sockaddr: %s (kind of random)\n", sockaddrtos(&sa, buffer, sizeof(buffer)));
+    printf("sockaddr: %s (sockaddr_in with AF_INET6)\n", sockaddrtos(&sa, buffer, sizeof(buffer)));
+
+    printf("sockaddr: no AF_INET6 test cases yet\n");
 #endif
 
 #if 0
-    printf("\n\033[97m%s\033[39m\n", "hexDump");
+    printf("\n" SGR_BWHITE "%s" SGR_DEFAULT "\n", "print frames and headers");
+
+    printf("\n" SGR_BLUE "  --=====| " SGR_BBLUE " %s " SGR_BLUE " |=====--" SGR_DEFAULT "\n", "ARP request");
+    printEthPacket(ETH_ARP_request, sizeof(ETH_ARP_request));
+
+    printf("\n" SGR_BLUE "  --=====| " SGR_BBLUE " %s " SGR_BLUE " |=====--" SGR_DEFAULT "\n", "ICMP echo request");
+    printEthPacket(ETH_ICMP_echo_request, sizeof(ETH_ICMP_echo_request));
+
+    printf("\n" SGR_BLUE "  --=====| " SGR_BBLUE " %s " SGR_BLUE " |=====--" SGR_DEFAULT "\n", "ICMP echo reply");
+    printEthPacket(ETH_ICMP_echo_reply, sizeof(ETH_ICMP_echo_reply));
+
+#endif
+
+#if 0
+    printf("\n" SGR_BWHITE "%s" SGR_DEFAULT "\n", "hexDump");
 
     const uint8_t* const loremIpsum = (uint8_t*)("Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam "
                                                  "nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat"
