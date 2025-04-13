@@ -315,6 +315,46 @@ char* ipptos(uint16_t proto, char* dst, size_t size)
     return r;
 }
 
+char* icmpttos(uint8_t type, char* dst, size_t size)
+{
+    char* r = NULL;
+
+    if (dst && (size >= ICMP_TYPE_STRLEN))
+    {
+        r = dst;
+
+        switch (type)
+        {
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_ECHOREPLY, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_DEST_UNREACH, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_SOURCE_QUENCH, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_REDIRECT, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_ECHO, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_TIME_EXCEEDED, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_PARAMETERPROB, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_TIMESTAMP, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_TIMESTAMPREPLY, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_INFO_REQUEST, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_INFO_REPLY, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_ADDRESS, 5);
+            SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_ADDRESSREPLY, 5);
+
+        default:
+        {
+            _Static_assert(ICMP_TYPE_STRLEN >= 11, "increase ICMP_TYPE_STRLEN");
+
+            const size_t res = (size_t)snprintf(dst, size, "ICMP_#%02xh", (int)type);
+            if (res >= size) { r = NULL; }
+        }
+        break;
+        }
+    }
+
+    return r;
+}
+
+// char* icmpctos(uint8_t code, uint8_t type, char* dst, size_t size) {}
+
 static char* sockaddrtos_inet(const struct sockaddr_in* sa, char* dst, size_t size)
 {
     const in_port_t port = sa->sin_port;
@@ -602,41 +642,7 @@ void printIpPacket(const uint8_t* data, size_t size)
 
     if (ipProtocol == IPPROTO_TCP) { printTcpPacket(ipData, ipDataSize, &pseudoHdr); }
     else if (ipProtocol == IPPROTO_UDP) { printUdpPacket(ipData, ipDataSize, &pseudoHdr); }
-    else if (ipProtocol == IPPROTO_ICMP)
-    {
-        const struct icmphdr* const icmpHeader = (const struct icmphdr*)(ipData);
-        const size_t icmpHeaderSize = 8;
-        const uint8_t* const icmpData = ipData + icmpHeaderSize;
-        const size_t icmpDataSize = ipDataSize - icmpHeaderSize;
-        const uint8_t icmpType = icmpHeader->type;
-        const uint8_t icmpCode = icmpHeader->code;
-        const uint16_t icmpCheck = ntohs(icmpHeader->checksum);
-        // ...
-        const uint8_t* const padData = ipData + icmpHeaderSize + icmpDataSize; // potential padding
-        const size_t padDataSize = ipDataSize - icmpHeaderSize - icmpDataSize; // potential padding
-
-        const uint16_t icmpCheckCalc = inet_checksum(ipData, icmpHeaderSize + icmpDataSize);
-
-        printf(SGR_ICMP);
-
-        printf("ICMP\n");
-        printf("  type      %i\n", (int)icmpType);
-        printf("  code      %i\n", (int)icmpCode);
-        printf("  check     %s0x%04x" SGR_ICMP "\n", ((icmpCheckCalc == 0) ? "" : SGR_RED), (int)icmpCheck);
-        printf("  hdr size  %zu\n", icmpHeaderSize);
-        printf("  data size %zu + %zu pad\n", icmpDataSize, padDataSize);
-
-        hexDump((const uint8_t*)icmpHeader, icmpHeaderSize);
-
-        printf("\n");
-
-        hexDump(icmpData, icmpDataSize);
-
-        printf(SGR_DEFAULT);
-        fflush(stdout);
-
-        printPacket_padding(padData, padDataSize);
-    }
+    else if (ipProtocol == IPPROTO_ICMP) { printIcmpPacket(ipData, ipDataSize); }
     else
     {
         char buffer[100];
@@ -649,6 +655,59 @@ void printIpPacket(const uint8_t* data, size_t size)
         printf(SGR_DEFAULT);
         fflush(stdout);
     }
+}
+
+void printIcmpHeader(const uint8_t* data, size_t size)
+{
+    const struct icmphdr* const icmpHeader = (const struct icmphdr*)(data);
+    const size_t icmpHeaderSize = 8;
+    const uint8_t icmpType = icmpHeader->type;
+    const uint8_t icmpCode = icmpHeader->code;
+    const uint16_t icmpCheck = ntohs(icmpHeader->checksum);
+    // ...
+    __attribute__((unused)) const uint8_t* const icmpData = data + icmpHeaderSize;
+    __attribute__((unused)) const size_t icmpDataSize = size - icmpHeaderSize;
+    __attribute__((unused)) const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
+    __attribute__((unused)) const size_t padDataSize = size - icmpHeaderSize - icmpDataSize;     // potential padding
+
+    const uint16_t icmpCheckCalc = inet_checksum(data, icmpHeaderSize + icmpDataSize);
+
+    char buffer[100];
+
+    printf(SGR_ICMP);
+
+    printf("ICMP\n");
+    printf("  type      %i %s\n", (int)icmpType, icmpttos(icmpType, buffer, sizeof(buffer)));
+    printf("  code      %i\n", (int)icmpCode);
+    printf("  check     %s0x%04x" SGR_ICMP "\n", ((icmpCheckCalc == 0) ? "" : SGR_RED), (int)icmpCheck);
+    printf("  hdr size  %zu\n", icmpHeaderSize);
+    printf("  data size %zu + %zu pad\n", icmpDataSize, padDataSize);
+
+    hexDump((const uint8_t*)icmpHeader, icmpHeaderSize);
+
+    printf(SGR_DEFAULT);
+    fflush(stdout);
+}
+
+void printIcmpPacket(const uint8_t* data, size_t size)
+{
+    printIcmpHeader(data, size);
+    printf("\n");
+
+    const size_t icmpHeaderSize = 8;
+    const uint8_t* const icmpData = data + icmpHeaderSize;
+    const size_t icmpDataSize = size - icmpHeaderSize;
+    const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
+    const size_t padDataSize = size - icmpHeaderSize - icmpDataSize;     // potential padding
+
+    printf(SGR_ICMP);
+
+    hexDump(icmpData, icmpDataSize);
+
+    printf(SGR_DEFAULT);
+    fflush(stdout);
+
+    printPacket_padding(padData, padDataSize);
 }
 
 void printTcpHeader(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr)

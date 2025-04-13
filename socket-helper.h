@@ -101,11 +101,12 @@ uint16_t inet_checksum_final(uint32_t* sum);
 
 
 
-#define MAC_ADDRSTRLEN 18
-#define AF_STRLEN      14
-#define ETH_P_STRLEN   17
-#define IPPROTO_STRLEN 17
-#define SOCKADDRSTRLEN 54
+#define MAC_ADDRSTRLEN   18
+#define AF_STRLEN        14
+#define ETH_P_STRLEN     17
+#define IPPROTO_STRLEN   17
+#define ICMP_TYPE_STRLEN 15
+#define SOCKADDRSTRLEN   54
 
 /**
  * @brief Converts a hardware (MAC) address to it's string representation.
@@ -120,6 +121,8 @@ char* mactos(const uint8_t* mac, char* dst, size_t size);
 char* aftos(int af, char* dst, size_t size);
 char* ethptos(uint16_t proto, char* dst, size_t size);
 char* ipptos(uint16_t proto, char* dst, size_t size);
+char* icmpttos(uint8_t type, char* dst, size_t size);
+char* icmpctos(uint8_t code, uint8_t type, char* dst, size_t size);
 char* sockaddrtos(const void* sa, char* dst, size_t size);
 
 
@@ -128,6 +131,8 @@ void printEthHeader(const uint8_t* data, size_t size);
 void printEthPacket(const uint8_t* data, size_t size);
 void printIpHeader(const uint8_t* data, size_t size);
 void printIpPacket(const uint8_t* data, size_t size);
+void printIcmpHeader(const uint8_t* data, size_t size);
+void printIcmpPacket(const uint8_t* data, size_t size);
 
 /**
  * @param data

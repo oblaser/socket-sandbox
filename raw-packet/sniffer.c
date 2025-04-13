@@ -5,6 +5,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 */
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -14,6 +15,10 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include "../socket-helper.h"
 
 #include <net/ethernet.h>
+#include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
 
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -26,14 +31,30 @@ int main(int argc, char** argv)
 {
     char xtosBuffer[100];
 
-    uint16_t protocol = ETH_P_ALL;
+    uint16_t filterEthProtocol = ETH_P_ALL;
+    uint16_t filterIpProtocol = 0;
 
     if (argc > 1)
     {
         const char* const arg1 = argv[1];
 
-        if (0 == strncmp(arg1, "IP", 3)) { protocol = ETH_P_IP; }
-        else if (0 == strncmp(arg1, "ARP", 4)) { protocol = ETH_P_ARP; }
+        if (0 == strncmp(arg1, "ARP", 4)) { filterEthProtocol = ETH_P_ARP; }
+        else if (0 == strncmp(arg1, "IP", 3)) { filterEthProtocol = ETH_P_IP; }
+        else if (0 == strncmp(arg1, "ICMP", 5))
+        {
+            filterEthProtocol = ETH_P_IP;
+            filterIpProtocol = IPPROTO_ICMP;
+        }
+        else if (0 == strncmp(arg1, "TCP", 4))
+        {
+            filterEthProtocol = ETH_P_IP;
+            filterIpProtocol = IPPROTO_TCP;
+        }
+        else if (0 == strncmp(arg1, "UDP", 4))
+        {
+            filterEthProtocol = ETH_P_IP;
+            filterIpProtocol = IPPROTO_UDP;
+        }
         else
         {
             char str[200];
@@ -48,7 +69,7 @@ int main(int argc, char** argv)
 
 
 
-    const int sockfd = socket(AF_PACKET, SOCK_RAW, htons(protocol));
+    const int sockfd = socket(AF_PACKET, SOCK_RAW, htons(filterEthProtocol));
     if (sockfd < 0)
     {
         printErrno("failed to create socket", errno);
@@ -71,8 +92,83 @@ int main(int argc, char** argv)
         }
         else
         {
-            printf("\n" SGR_BLUE "  --=====| " SGR_BBLUE " %s " SGR_BLUE " |=====--" SGR_DEFAULT "\n",
-                   sockaddrtos(&sockSrcAddr, xtosBuffer, sizeof(xtosBuffer)));
+            const struct ethhdr* const ethHeader = (const struct ethhdr*)(sockData);
+            uint16_t ethProtocol = ntohs(ethHeader->h_proto);
+            const size_t ethHeaderSize = ((ethProtocol == ETH_P_8021Q) ? (ETH_HLEN + 4) : (ETH_HLEN));
+            __attribute__((unused)) const uint8_t* const ethData = sockData + ethHeaderSize;
+            __attribute__((unused)) const size_t ethDataSize = sockDataSize - ethHeaderSize;
+
+            const struct iphdr* const ipHeader = (const struct iphdr*)(ethData);
+            const uint8_t ipIhl = ipHeader->ihl;
+            const size_t ipHeaderSize = ipIhl * 4u;
+            const uint8_t ipProtocol = ipHeader->protocol;
+            __attribute__((unused)) const uint8_t* const ipData = ethData + ipHeaderSize;
+            __attribute__((unused)) const size_t ipDataSize = ethDataSize - ipHeaderSize;
+
+            const uint16_t ipCheckCalc = inet_checksum(ethData, ipHeaderSize);
+
+            struct ippseudohdr ___pseudoHdr;
+            const struct ippseudohdr* const pseudoHdr = &___pseudoHdr;
+            ippseudohdr_init(&___pseudoHdr, ipHeader);
+
+            __attribute__((unused)) uint16_t srcPort = 0;
+            __attribute__((unused)) uint16_t dstPort = 0;
+            __attribute__((unused)) uint8_t icmpType;
+
+            __attribute__((unused)) bool checksumOk = true;
+            if (ipCheckCalc != 0) { checksumOk = false; }
+
+            if (ipProtocol == IPPROTO_TCP)
+            {
+                const struct tcphdr* const tcpHeader = (const struct tcphdr*)(ipData);
+                srcPort = ntohs(tcpHeader->th_sport);
+                dstPort = ntohs(tcpHeader->th_dport);
+
+                uint32_t sum;
+                inet_checksum_init(&sum);
+                inet_checksum_update_ippseudohdr(&sum, pseudoHdr);
+                inet_checksum_update(&sum, ipData, pseudoHdr->length);
+                const uint16_t tcpCheckCalc = inet_checksum_final(&sum);
+
+                if (tcpCheckCalc != 0) { checksumOk = false; }
+            }
+            else if (ipProtocol == IPPROTO_UDP)
+            {
+                const struct udphdr* const udpHeader = (const struct udphdr*)(ipData);
+                srcPort = ntohs(udpHeader->uh_sport);
+                dstPort = ntohs(udpHeader->uh_dport);
+
+                uint32_t sum;
+                inet_checksum_init(&sum);
+                inet_checksum_update_ippseudohdr(&sum, pseudoHdr);
+                inet_checksum_update(&sum, ipData, pseudoHdr->length);
+                const uint16_t udpCheckCalc = inet_checksum_final(&sum);
+
+                if (udpCheckCalc != 0) { checksumOk = false; }
+            }
+            else if (ipProtocol == IPPROTO_ICMP)
+            {
+                const struct icmphdr* const icmpHeader = (const struct icmphdr*)(ipData);
+                const size_t icmpHeaderSize = 8;
+                icmpType = icmpHeader->type;
+                const size_t icmpDataSize = ipDataSize - icmpHeaderSize;
+
+                const uint16_t icmpCheckCalc = inet_checksum(ipData, icmpHeaderSize + icmpDataSize);
+
+                if (icmpCheckCalc != 0) { checksumOk = false; }
+            }
+
+
+
+            // filter
+            if ((1 && 0) || 0 ||                                                 // global enable/disable filter
+                ((filterIpProtocol != 0) && (ipProtocol == filterIpProtocol)) || // IP protocol filter
+                //(!checksumOk) ||                                                 // checksum filter
+                false // (closing global)
+            )
+            {
+                printf("\n" SGR_BLUE "  --=====| " SGR_BBLUE " %s " SGR_BLUE " |=====--" SGR_DEFAULT "\n",
+                       sockaddrtos(&sockSrcAddr, xtosBuffer, sizeof(xtosBuffer)));
 
 #if 0
             printf(SGR_BBLACK "packet size: %zi\n", sockDataSize);
@@ -81,7 +177,8 @@ int main(int argc, char** argv)
             fflush(stdout);
 #endif
 
-            printEthPacket(sockData, sockDataSize);
+                printEthPacket(sockData, sockDataSize);
+            }
         }
     }
 
