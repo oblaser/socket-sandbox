@@ -14,7 +14,7 @@ CFLAGS = -c $(CFLAGS_COMMON)
 CFLAGS_BIN = $(CFLAGS_COMMON)
 LFLAGS = 
 
-OBJS = common.o
+OBJS = common.o socket-helper.o
 EXES = sniffer.bin
 
 FILES_TO_CLEAN = $(OBJS) $(EXES)
@@ -30,6 +30,9 @@ sniffer.bin: $(OBJS) sniffer.c
 
 common.o: ../common.c ../common.h
 	$(CC) $(CFLAGS) ../common.c
+
+socket-helper.o: ../socket-helper.c ../socket-helper.h
+	$(CC) $(CFLAGS) ../socket-helper.c
 
 clean:
 	rm $(FILES_TO_CLEAN)

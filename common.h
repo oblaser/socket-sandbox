@@ -10,163 +10,54 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <stddef.h>
 #include <stdint.h>
 
-#include <net/ethernet.h>
-#include <netinet/ip.h>
-#include <sys/socket.h>
 
 
-#ifdef __cplusplus
-#define C_DECL_BEGIN extern "C" {
-#define C_DECL_END   }
-#else
-#define C_DECL_BEGIN
-#define C_DECL_END
-#endif
+#define SGR_BLACK           "\033[30m"
+#define SGR_RED             "\033[31m"
+#define SGR_GREEN           "\033[32m"
+#define SGR_YELLOW          "\033[33m"
+#define SGR_BLUE            "\033[34m"
+#define SGR_MAGENTA         "\033[35m"
+#define SGR_CYAN            "\033[36m"
+#define SGR_WHITE           "\033[37m"
+#define SGR_RGB(_r, _g, _b) "\033[38;2;" #_r ";" #_g ";" #_b "m"
+#define SGR_DEFAULT         "\033[39m"
+#define SGR_BBLACK          "\033[90m"
+#define SGR_BRED            "\033[91m"
+#define SGR_BGREEN          "\033[92m"
+#define SGR_BYELLOW         "\033[93m"
+#define SGR_BBLUE           "\033[94m"
+#define SGR_BMAGENTA        "\033[95m"
+#define SGR_BCYAN           "\033[96m"
+#define SGR_BWHITE          "\033[97m"
 
-C_DECL_BEGIN
 
 
-
-/**
- * @brief Extended 802.1Q VLAN ethernet header
- */
-struct ethhdr8021Q
+enum EXITCODE // https://tldp.org/LDP/abs/html/exitcodes.html / on MSW are no preserved codes
 {
-    uint8_t ehq_dest[ETH_ALEN];
-    uint8_t ehq_source[ETH_ALEN];
-    uint16_t ehq_tpid;
-    uint16_t ehq_tci;
-    uint16_t ehq_proto;
-} __attribute__((packed));
+    EC_OK = 0,
+    EC_ERROR = 1,
 
+    EC__begin_ = 79,
 
+    EC_SOCK = EC__begin_,
+    EC_CONNECT,
+    EC_BIND,
+    EC_LISTEN,
+    EC_ACCEPT,
 
-#define ARPDATA_HLEN (6) // hardware address length
-#define ARPDATA_PLEN (4) // protocol address length
+    EC__end_,
 
-/**
- * @brief IPv4 ARP data container.
- *
- * - hardware address: MAC/EUI48
- * - protocol address: IPv4 address
- */
-struct arpdata
-{
-    uint8_t ar_sha[ARPDATA_HLEN]; // sender hardware address
-    uint8_t ar_spa[ARPDATA_PLEN]; // sender protocol address
-    uint8_t ar_tha[ARPDATA_HLEN]; // target hardware address
-    uint8_t ar_tpa[ARPDATA_PLEN]; // target protocol address
-} __attribute__((packed));
-
-
-
-struct ippseudohdr
-{
-    struct sockaddr_storage saddr;
-    struct sockaddr_storage daddr;
-    uint32_t length; // number of TCP/UDP packet octets = TCP/UDP header size + TCP/UDP payload size
-                     //                                 = IP packet size - IP header size (=IHL*4)
-    uint8_t protocol;
+    EC__max_ = 113
 };
-
-/**
- * @param [out] dst
- * @param iphdr
- * @return `dst`
- */
-struct ippseudohdr* ippseudohdr_init(struct ippseudohdr* dst, const struct iphdr* iphdr);
-
-/**
- * @param [out] dst
- * @param saddr `struct in6_addr*` or _tbd ..._
- * @param daddr `struct in6_addr*` or _tbd ..._
- * @param protocol Protocol type `IPPROTO_...`
- * @param length
- * @return On success `dst` is returned, `NULL` on error
- */
-struct ippseudohdr* ippseudohdr_init6(struct ippseudohdr* dst, const void* saddr, const void* daddr, uint8_t protocol, uint32_t length);
+_Static_assert(EC__end_ <= EC__max_, "too many error codes defined");
 
 
 
-uint16_t inet_checksum(const uint8_t* data, size_t count);
-
-void inet_checksum_init(uint32_t* sum);
-void inet_checksum_update(uint32_t* sum, const uint8_t* data, size_t count);
-void inet_checksum_update16h(uint32_t* sum, uint16_t value);
-void inet_checksum_update16n(uint32_t* sum, uint16_t value);
-void inet_checksum_update32h(uint32_t* sum, uint32_t value);
-void inet_checksum_update32n(uint32_t* sum, uint32_t value);
-void inet_checksum_update_ippseudohdr(uint32_t* sum, const struct ippseudohdr* pseudoHdr);
-uint16_t inet_checksum_final(uint32_t* sum);
+void printError(const char* str);
+void printErrno(const char* str, int eno);
+void printWarning(const char* str);
 
 
-
-#define MAC_ADDRSTRLEN 18
-#define AF_STRLEN      14
-#define ETH_P_STRLEN   17
-#define IPPROTO_STRLEN 17
-#define SOCKADDRSTRLEN 54
-
-/**
- * @brief Converts a hardware (MAC) address to it's string representation.
- *
- * @param mac Pointer to a buffer holding the hardware address, must be at least `ETH_ALEN` bytes long
- * @param dst Pointer to a string buffer, wich must be at least `MAC_ADDRSTRLEN` bytes long
- * @param size Size of the buffer pointed to by `dst`
- * @return On success `dst` is returned, `NULL` on error
- */
-char* mactos(const uint8_t* mac, char* dst, size_t size);
-
-char* aftos(int af, char* dst, size_t size);
-char* ethptos(uint16_t proto, char* dst, size_t size);
-char* ipptos(uint16_t proto, char* dst, size_t size);
-char* sockaddrtos(const void* sa, char* dst, size_t size);
-
-
-
-void printEthHeader(const uint8_t* data, size_t size);
-void printEthPacket(const uint8_t* data, size_t size);
-void printIpHeader(const uint8_t* data, size_t size);
-void printIpPacket(const uint8_t* data, size_t size);
-
-/**
- * @param data
- * @param size
- * @param pseudoHdr _optional_
- */
-void printTcpHeader(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr);
-
-/**
- * @param data
- * @param size
- * @param pseudoHdr _optional_
- */
-void printTcpPacket(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr);
-
-/**
- * @param data
- * @param size
- * @param pseudoHdr _optional_
- */
-void printUdpHeader(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr);
-
-/**
- * @param data
- * @param size
- * @param pseudoHdr _optional_
- */
-void printUdpPacket(const uint8_t* data, size_t size, const struct ippseudohdr* pseudoHdr);
-
-
-
-void hexDump(const uint8_t* data, size_t count);
-
-
-
-void COMMON_test_unit_system();
-
-
-
-C_DECL_END
 
 #endif // IG_COMMON_H
