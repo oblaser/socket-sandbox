@@ -242,7 +242,9 @@ char* ethptos(uint16_t proto, char* dst, size_t size)
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_LOCALTALK, 6);
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_CAN, 6);
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_CANFD, 6);
+#ifdef ETH_P_CANXL
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_CANXL, 6);
+#endif
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_PPPTALK, 6);
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_TR_802_2, 6);
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_MOBITEX, 6);
@@ -258,7 +260,9 @@ char* ethptos(uint16_t proto, char* dst, size_t size)
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_CAIF, 6);
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_XDSA, 6);
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_MAP, 6);
+#ifdef ETH_P_MCTP
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_MCTP, 6);
+#endif
 
         default:
         {
@@ -294,8 +298,12 @@ char* ipptos(uint16_t proto, char* dst, size_t size)
             SWITCH_CASE_STRCPY_DEFINE(dst, IPPROTO_TCP, 8);
             SWITCH_CASE_STRCPY_DEFINE(dst, IPPROTO_UDP, 8);
             SWITCH_CASE_STRCPY_DEFINE(dst, IPPROTO_IPV6, 8);
+#ifdef IPPROTO_L2TP
             SWITCH_CASE_STRCPY_DEFINE(dst, IPPROTO_L2TP, 8);
+#endif
+#ifdef IPPROTO_ETHERNET
             SWITCH_CASE_STRCPY_DEFINE(dst, IPPROTO_ETHERNET, 8);
+#endif
             SWITCH_CASE_STRCPY_DEFINE(dst, IPPROTO_RAW, 8);
 
         default:
