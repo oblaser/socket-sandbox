@@ -87,7 +87,8 @@ int main(int argc, char** argv)
         if (sockDataSize < 0)
         {
             printErrno("recvfrom() failed", errno);
-            close(sockfd);
+            const int err = close(sockfd);
+            if (err) { printErrno("close() failed", errno); }
             return EC_ERROR;
         }
         else
@@ -182,7 +183,8 @@ int main(int argc, char** argv)
         }
     }
 
-    close(sockfd);
+    const int err = close(sockfd);
+    if (err) { printErrno("close() failed", errno); }
 
     return 0;
 }
