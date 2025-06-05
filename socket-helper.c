@@ -1092,11 +1092,5 @@ void SOCKETHELPER_test_unit_system()
 
 
 
-void printError(const char* str);
-void printErrno(const char* str, int eno);
-void printWarning(const char* str);
-
-
-
 _Static_assert(ARPDATA_HLEN == ETH_ALEN, "invalid ARPDATA_HLEN value");
 _Static_assert(ARPDATA_PLEN == sizeof(struct in_addr), "invalid ARPDATA_PLEN value");
