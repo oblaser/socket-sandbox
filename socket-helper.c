@@ -94,8 +94,6 @@ uint16_t inet_checksum(const uint8_t* data, size_t count)
     return (uint16_t)(~sum);
 }
 
-void inet_checksum_init(uint32_t* sum) { *sum = 0; }
-
 void inet_checksum_update(uint32_t* sum, const uint8_t* data, size_t count)
 {
     while (count > 1)
@@ -108,11 +106,6 @@ void inet_checksum_update(uint32_t* sum, const uint8_t* data, size_t count)
 
     if (count > 0) { *sum += (uint32_t)(*data) << 8; }
 }
-
-void inet_checksum_update16h(uint32_t* sum, uint16_t value) { *sum += value; }
-void inet_checksum_update16n(uint32_t* sum, uint16_t value) { *sum += ntohs(value); }
-void inet_checksum_update32h(uint32_t* sum, uint32_t value) { *sum += (value >> 16) + (value & 0x0000FFFF); }
-void inet_checksum_update32n(uint32_t* sum, uint32_t value) { inet_checksum_update32h(sum, ntohl(value)); }
 
 void inet_checksum_update_ippseudohdr(uint32_t* sum, const struct ippseudohdr* pseudoHdr)
 {

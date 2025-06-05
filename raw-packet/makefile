@@ -8,7 +8,7 @@ CC = gcc
 CC_BIN = gcc
 LINK = gcc
 
-CFLAGS_COMMON = -pedantic -Wall -Werror=return-type -Werror=format -Wdouble-promotion -Werror=implicit -Werror=int-conversion -Werror=discarded-qualifiers -Werror=incompatible-pointer-types
+CFLAGS_COMMON = -pedantic -Wall -Werror=format -Werror=overflow -Werror=return-type -Wdouble-promotion  -Werror=discarded-qualifiers -Werror=implicit -Werror=incompatible-pointer-types -Werror=int-conversion -Werror=pointer-sign
 
 CFLAGS = -c $(CFLAGS_COMMON)
 CFLAGS_BIN = $(CFLAGS_COMMON)

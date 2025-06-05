@@ -10,6 +10,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <stddef.h>
 #include <stdint.h>
 
+#include <arpa/inet.h>
 #include <net/ethernet.h>
 #include <netinet/ip.h>
 #include <sys/socket.h>
@@ -90,12 +91,15 @@ struct ippseudohdr* ippseudohdr_init6(struct ippseudohdr* dst, const void* saddr
 
 uint16_t inet_checksum(const uint8_t* data, size_t count);
 
-void inet_checksum_init(uint32_t* sum);
+static inline void inet_checksum_init(uint32_t* sum) { *sum = 0; }
+
 void inet_checksum_update(uint32_t* sum, const uint8_t* data, size_t count);
-void inet_checksum_update16h(uint32_t* sum, uint16_t value);
-void inet_checksum_update16n(uint32_t* sum, uint16_t value);
-void inet_checksum_update32h(uint32_t* sum, uint32_t value);
-void inet_checksum_update32n(uint32_t* sum, uint32_t value);
+
+static inline void inet_checksum_update16h(uint32_t* sum, uint16_t value) { *sum += value; }
+static inline void inet_checksum_update16n(uint32_t* sum, uint16_t value) { *sum += ntohs(value); }
+static inline void inet_checksum_update32h(uint32_t* sum, uint32_t value) { *sum += (value >> 16) + (value & 0x0000FFFF); }
+static inline void inet_checksum_update32n(uint32_t* sum, uint32_t value) { inet_checksum_update32h(sum, ntohl(value)); }
+
 void inet_checksum_update_ippseudohdr(uint32_t* sum, const struct ippseudohdr* pseudoHdr);
 uint16_t inet_checksum_final(uint32_t* sum);
 
