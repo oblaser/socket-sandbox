@@ -45,6 +45,8 @@ enum EXITCODE // https://tldp.org/LDP/abs/html/exitcodes.html / on MSW are no pr
     EC_BIND,
     EC_LISTEN,
     EC_ACCEPT,
+    EC_READ,
+    EC_WRITE,
 
     EC__end_,
 

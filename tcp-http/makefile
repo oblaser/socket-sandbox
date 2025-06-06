@@ -15,7 +15,7 @@ CFLAGS_BIN = $(CFLAGS_COMMON)
 LFLAGS = 
 
 OBJS = common.o socket-helper.o
-EXES = server.bin
+EXES = server.bin client.bin
 
 FILES_TO_CLEAN = $(OBJS) $(EXES)
 
@@ -27,6 +27,9 @@ all: $(EXES)
 
 server.bin: $(OBJS) server.c
 	$(CC_BIN) $(CFLAGS_BIN) $(LFLAGS) -o server.bin server.c $(OBJS)
+
+client.bin: $(OBJS) client.c
+	$(CC_BIN) $(CFLAGS_BIN) $(LFLAGS) -o client.bin client.c $(OBJS)
 
 common.o: ../common.c ../common.h
 	$(CC) $(CFLAGS) ../common.c
