@@ -60,6 +60,19 @@ void printError(const char* str);
 void printErrno(const char* str, int eno);
 void printWarning(const char* str);
 
+#ifdef _WIN32
+void printWSError(const char* str, int error);
+#endif
+
+
+
+
+
+
+
+
+
+
 
 
 #endif // IG_COMMON_H

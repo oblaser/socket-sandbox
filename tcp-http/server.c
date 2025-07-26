@@ -13,9 +13,44 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include "../common.h"
 #include "../socket-helper.h"
 
+#ifdef _WIN32
+
+#include <io.h>
+#include <sys/types.h>
+#include <winsock2.h>
+#include <WS2tcpip.h>
+
+#include <Windows.h>
+
+#ifdef _MSC_VER
+#pragma comment(lib, "ws2_32.lib")
+#endif // _MSC_VER
+
+#else // _WIN32
+
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+#endif // _WIN32
+
+
+
+#ifdef _WIN32
+
+typedef char sockopt_optval_t;
+typedef int pform_ssize_t;
+
+static void cleanupWinsock();
+
+#else // _WIN32
+
+typedef int sockopt_optval_t;
+typedef ssize_t pform_ssize_t;
+
+#define cleanupWinsock() // nop
+
+#endif // _WIN32
 
 
 
@@ -24,14 +59,37 @@ int main(int argc, char** argv)
     int err;
     char xtosBuffer[100];
 
+#ifdef _WIN32
+
+    { // enable virual terminal mode
+        HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (handle != INVALID_HANDLE_VALUE)
+        {
+            DWORD mode = 0;
+            if (GetConsoleMode(handle, &mode)) { SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING); }
+        }
+    }
+
+    WSADATA wsaData;
+    err = WSAStartup(0x0202, &wsaData);
+    if (err)
+    {
+        printWSError("WSAStartup() failed", err);
+        cleanupWinsock();
+        return EC_ERROR;
+    }
+
+#endif // _WIN32
+
     const int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
     {
         printErrno("socket() failed", errno);
+        cleanupWinsock();
         return EC_SOCK;
     }
 
-    err = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+    err = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(sockopt_optval_t){ 1 }, sizeof(int));
     if (err) { printErrno("setsockopt(SO_REUSEADDR) failed", errno); }
 
     struct sockaddr_in srvaddr;
@@ -46,6 +104,7 @@ int main(int argc, char** argv)
     {
         printErrno("bind() failed", errno);
         close(sockfd);
+        cleanupWinsock();
         return EC_BIND;
     }
 
@@ -54,6 +113,7 @@ int main(int argc, char** argv)
     {
         printErrno("listen() failed", errno);
         close(sockfd);
+        cleanupWinsock();
         return EC_LISTEN;
     }
 
@@ -62,18 +122,22 @@ int main(int argc, char** argv)
     while (1)
     {
         struct sockaddr_in addr;
-        socklen_t addrlen;
-        char rcvBuffer[1024 * 1024];
+        socklen_t addrlen = sizeof(addr);
+        char rcvBuffer[4 * 1024];
         char ansBuffer[1024];
-        ssize_t n;
+        pform_ssize_t n;
 
         printf(SGR_BBLACK "waiting for a connection on port %i" SGR_DEFAULT "\n", (int)ntohs(srvaddr.sin_port));
 
         const int connfd = accept(sockfd, (struct sockaddr*)(&addr), &addrlen);
         if (connfd < 0)
         {
+#ifdef _WIN32
+            printWSError("accept() failed", WSAGetLastError());
+#else
             printErrno("accept() failed", errno);
-            // return EC_ACCEPT;
+#endif
+
             continue;
         }
 
@@ -81,7 +145,7 @@ int main(int argc, char** argv)
 
 
 
-        n = read(connfd, rcvBuffer, sizeof(rcvBuffer));
+        n = recv(connfd, rcvBuffer, sizeof(rcvBuffer), 0);
         if (n < 0)
         {
             printErrno("read() failed", errno);
@@ -90,10 +154,10 @@ int main(int argc, char** argv)
             continue;
         }
 
-        if (strcmp((rcvBuffer + n - 4), "\r\n\r\n"))
+        if (strncmp((rcvBuffer + n - 4), "\r\n\r\n", 4))
         {
             printWarning("invalid HTTP request");
-            rcvBuffer[n] = 0; // CAUTION this may write to memory outside of the buffer
+            rcvBuffer[(n < sizeof(rcvBuffer) ? n : sizeof(rcvBuffer))] = 0;
         }
         else { rcvBuffer[n - 4] = 0; }
 
@@ -106,16 +170,74 @@ int main(int argc, char** argv)
         strcat(ansBuffer, "Your IP address is ");
         strcat(ansBuffer, sockaddrtos(&addr, xtosBuffer, sizeof(xtosBuffer)));
 
-        n = write(connfd, ansBuffer, strlen(ansBuffer));
+        n = send(connfd, ansBuffer, strlen(ansBuffer), 0);
         if (n < 0) { printErrno("write() failed", errno); }
         else if (n != strlen(ansBuffer)) { printWarning("failed to write the whole answer"); }
 
+#ifdef _WIN32
+        err = closesocket(connfd);
+        if (err) { printWSError("closesocket(connfd) failed", WSAGetLastError()); }
+#else
         err = close(connfd);
         if (err) { printErrno("close(connfd) failed", errno); }
+#endif
     }
 
+#ifdef _WIN32
+    err = closesocket(sockfd);
+    if (err) { printWSError("closesocket(sockfd) failed", WSAGetLastError()); }
+#else
     err = close(sockfd);
     if (err) { printErrno("close(sockfd) failed", errno); }
+#endif
+
+    cleanupWinsock();
 
     return 0;
 }
+
+
+
+#ifdef _WIN32
+
+void cleanupWinsock()
+{
+    int err;
+
+    err = WSACleanup();
+    if (err)
+    {
+        err = WSAGetLastError();
+
+        switch (err)
+        {
+        case WSANOTINITIALISED:
+            printError("WSACleanup() failed, uninitialised");
+            break;
+
+        case WSAENETDOWN:
+            printError("WSACleanup() failed, network subsystem has failed");
+            break;
+
+        case WSAEINPROGRESS:
+            printError("WSACleanup() failed, in progress");
+            while (err == WSAEINPROGRESS)
+            {
+                err = WSACleanup();
+                if (err)
+                {
+                    err = WSAGetLastError();
+                    Sleep(100);
+                    printf(".");
+                }
+            }
+            printf("\n");
+            break;
+
+        default:
+            break;
+        }
+    }
+}
+
+#endif // _WIN32

@@ -14,6 +14,20 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include "common.h"
 #include "socket-helper.h"
 
+#ifdef _WIN32
+
+#include <sys/types.h>
+#include <winsock2.h>
+#include <WS2tcpip.h>
+
+#include <Windows.h>
+
+#ifdef _MSC_VER
+#pragma comment(lib, "ws2_32.lib")
+#endif // _MSC_VER
+
+#else // _WIN32
+
 #include <arpa/inet.h>
 
 #include <net/ethernet.h>
@@ -31,6 +45,8 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <ifaddrs.h>
 #include <unistd.h>
 
+#endif // _WIN32
+
 
 #define SGR_ETH     SGR_DEFAULT
 #define SGR_ARP     SGR_RGB(244, 221, 153)
@@ -47,6 +63,8 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
         break
 
 
+
+#ifndef _WIN32
 
 struct ippseudohdr* ippseudohdr_init(struct ippseudohdr* dst, const struct iphdr* iphdr)
 {
@@ -72,6 +90,8 @@ struct ippseudohdr* ippseudohdr_init6(struct ippseudohdr* dst, const void* saddr
     fprintf(stderr, SGR_BRED "error:" SGR_DEFAULT " %s is not yet implemented", __func__);
     return NULL;
 }
+
+#endif // _WIN32
 
 
 
@@ -179,16 +199,18 @@ char* aftos(int af, char* dst, size_t size)
         switch (af)
         {
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_UNSPEC, 3);
-            SWITCH_CASE_STRCPY_DEFINE(dst, AF_LOCAL, 3);
-#if (AF_UNIX != AF_LOCAL)
+#if (AF_UNIX != AF_LOCAL) || !defined(_WIN32)
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_UNIX, 3);
 #endif
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_INET, 3);
-            SWITCH_CASE_STRCPY_DEFINE(dst, AF_AX25, 3);
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_IPX, 3);
-            SWITCH_CASE_STRCPY_DEFINE(dst, AF_X25, 3);
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_INET6, 3);
+#ifndef _WIN32
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_PACKET, 3);
+            SWITCH_CASE_STRCPY_DEFINE(dst, AF_X25, 3);
+            SWITCH_CASE_STRCPY_DEFINE(dst, AF_AX25, 3);
+            SWITCH_CASE_STRCPY_DEFINE(dst, AF_LOCAL, 3);
+#endif // _WIN32
 
         default:
         {
@@ -215,6 +237,7 @@ char* ethptos(uint16_t proto, char* dst, size_t size)
 
         switch (proto)
         {
+#ifndef _WIN32
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_IP, 6);
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_X25, 6);
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_ARP, 6);
@@ -256,6 +279,7 @@ char* ethptos(uint16_t proto, char* dst, size_t size)
 #ifdef ETH_P_MCTP
             SWITCH_CASE_STRCPY_DEFINE(dst, ETH_P_MCTP, 6);
 #endif
+#endif // _WIN32
 
         default:
         {
@@ -326,6 +350,7 @@ char* icmpttos(uint8_t type, char* dst, size_t size)
 
         switch (type)
         {
+#ifndef _WIN32
             SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_ECHOREPLY, 5);
             SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_DEST_UNREACH, 5);
             SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_SOURCE_QUENCH, 5);
@@ -339,6 +364,7 @@ char* icmpttos(uint8_t type, char* dst, size_t size)
             SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_INFO_REPLY, 5);
             SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_ADDRESS, 5);
             SWITCH_CASE_STRCPY_DEFINE(dst, ICMP_ADDRESSREPLY, 5);
+#endif // _WIN32
 
         default:
         {
@@ -438,6 +464,8 @@ char* sockaddrtos(const void* sa, char* dst, size_t size)
 }
 
 
+
+#ifndef _WIN32
 
 static void printPacket_padding(const uint8_t* data, size_t size)
 {
@@ -842,6 +870,8 @@ void printUdpPacket(const uint8_t* data, size_t size, const struct ippseudohdr* 
     printPacket_padding(padData, padDataSize);
 }
 
+#endif // _WIN32
+
 
 
 /**
@@ -923,6 +953,8 @@ void hexDump(const uint8_t* data, size_t count)
 }
 
 
+
+#ifndef _WIN32
 
 void SOCKETHELPER_test_unit_system()
 {
@@ -1083,7 +1115,13 @@ void SOCKETHELPER_test_unit_system()
 #endif
 }
 
+#endif // _WIN32
 
+
+
+#ifndef _WIN32
 
 _Static_assert(ARPDATA_HLEN == ETH_ALEN, "invalid ARPDATA_HLEN value");
 _Static_assert(ARPDATA_PLEN == sizeof(struct in_addr), "invalid ARPDATA_PLEN value");
+
+#endif // _WIN32

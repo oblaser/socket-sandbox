@@ -10,10 +10,17 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef _WIN32
+#include <sys/types.h>
+#include <winsock2.h>
+#else
+
 #include <arpa/inet.h>
 #include <net/ethernet.h>
 #include <netinet/ip.h>
 #include <sys/socket.h>
+
+#endif // _WIN32
 
 
 #ifdef __cplusplus
@@ -27,6 +34,12 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 C_DECL_BEGIN
 
 
+
+#ifdef _WIN32
+
+typedef USHORT in_port_t;
+
+#else // _WIN32
 
 /**
  * @brief Extended 802.1Q VLAN ethernet header
@@ -58,6 +71,9 @@ struct arpdata
     uint8_t ar_tha[ARPDATA_HLEN]; // target hardware address
     uint8_t ar_tpa[ARPDATA_PLEN]; // target protocol address
 } __attribute__((packed));
+
+
+#endif // _WIN32
 
 
 
@@ -110,7 +126,7 @@ uint16_t inet_checksum_final(uint32_t* sum);
 #define ETH_P_STRLEN     17
 #define IPPROTO_STRLEN   17
 #define ICMP_TYPE_STRLEN 15
-#define SOCKADDRSTRLEN   54
+#define SOCKADDRSTRLEN   73
 
 /**
  * @brief Converts a hardware (MAC) address to it's string representation.
