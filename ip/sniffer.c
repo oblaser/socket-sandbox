@@ -48,6 +48,33 @@ int main(int argc, char** argv)
     int err;
     char xtosBuffer[100];
 
+    uint16_t filterIpProtocol = 0;
+
+    if (argc > 1)
+    {
+        const char* const arg1 = argv[1];
+
+        if (0 == strncmp(arg1, "ICMP", 5)) { filterIpProtocol = IPPROTO_ICMP; }
+        else if (0 == strncmp(arg1, "TCP", 4)) { filterIpProtocol = IPPROTO_TCP; }
+        else if (0 == strncmp(arg1, "UDP", 4)) { filterIpProtocol = IPPROTO_UDP; }
+        else
+        {
+            char str[200];
+            strcpy(str, "unknown protocol \"");
+            strcat(str, arg1);
+            strcat(str, "\"");
+
+            printError(str);
+            return EC_ERROR;
+        }
+    }
+
+#ifndef _WIN32
+    if (filterIpProtocol == 0) { printWarning("missing protocol filter"); }
+#endif
+
+
+
 #ifdef _WIN32
     enableVirtualTerminalProcessing();
 
@@ -61,7 +88,13 @@ int main(int argc, char** argv)
     }
 #endif // _WIN32
 
-    const int sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_IP);
+    const int sockfd = socket(AF_INET, SOCK_RAW,
+#ifdef _WIN32
+                              IPPROTO_IP
+#else
+                              filterIpProtocol
+#endif
+    );
     if (sockfd < 0)
     {
 #ifdef _WIN32
@@ -124,6 +157,8 @@ int main(int argc, char** argv)
             const uint8_t ipIhl = ipHeader->ihl;
             const size_t ipHeaderSize = ipIhl * 4u;
             const uint8_t ipProtocol = ipHeader->protocol;
+
+            if ((filterIpProtocol != 0) && (filterIpProtocol != ipProtocol)) { continue; }
 
             printf("\n" SGR_BLUE "  --=====| " SGR_BBLUE " %s " SGR_BLUE " |=====--" SGR_DEFAULT "\n",
                    sockaddrtos(&sockSrcAddr, xtosBuffer, sizeof(xtosBuffer)));
