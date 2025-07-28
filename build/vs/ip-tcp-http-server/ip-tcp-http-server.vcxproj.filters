@@ -18,10 +18,10 @@
     <ClCompile Include="..\..\..\common.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\tcp-http\server.c">
+    <ClCompile Include="..\..\..\socket-helper.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\socket-helper.c">
+    <ClCompile Include="..\..\..\ip-tcp\http-server.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

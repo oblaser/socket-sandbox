@@ -15,7 +15,7 @@ CFLAGS_BIN = $(CFLAGS_COMMON)
 LFLAGS = 
 
 OBJS = common.o socket-helper.o
-EXES = server.bin client.bin
+EXES = http-server.bin http-client.bin
 
 FILES_TO_CLEAN = $(OBJS) $(EXES)
 
@@ -25,11 +25,11 @@ BUILDDATE = $(shell date +"%Y-%m-%d-%H-%M")
 
 all: $(EXES)
 
-server.bin: $(OBJS) server.c
-	$(CC_BIN) $(CFLAGS_BIN) $(LFLAGS) -o server.bin server.c $(OBJS)
+http-server.bin: $(OBJS) http-server.c
+	$(CC_BIN) $(CFLAGS_BIN) $(LFLAGS) -o http-server.bin http-server.c $(OBJS)
 
-client.bin: $(OBJS) client.c
-	$(CC_BIN) $(CFLAGS_BIN) $(LFLAGS) -o client.bin client.c $(OBJS)
+http-client.bin: $(OBJS) http-client.c
+	$(CC_BIN) $(CFLAGS_BIN) $(LFLAGS) -o http-client.bin http-client.c $(OBJS)
 
 common.o: ../common.c ../common.h
 	$(CC) $(CFLAGS) ../common.c

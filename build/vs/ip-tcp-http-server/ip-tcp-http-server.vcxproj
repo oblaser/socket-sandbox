@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{2aca15da-b606-4e9d-a339-a5ae1d053fb3}</ProjectGuid>
-    <RootNamespace>tcphttpserver</RootNamespace>
+    <ProjectGuid>{b052122d-f3b2-4707-90b1-e6d7b22ae915}</ProjectGuid>
+    <RootNamespace>iptcphttpserver</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -148,8 +148,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\common.c" />
+    <ClCompile Include="..\..\..\ip-tcp\http-server.c" />
     <ClCompile Include="..\..\..\socket-helper.c" />
-    <ClCompile Include="..\..\..\tcp-http\server.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\common.h" />

@@ -199,18 +199,17 @@ char* aftos(int af, char* dst, size_t size)
         switch (af)
         {
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_UNSPEC, 3);
+            SWITCH_CASE_STRCPY_DEFINE(dst, AF_UNIX, 3);
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_INET, 3);
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_IPX, 3);
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_INET6, 3);
 #ifndef _WIN32
 #if (AF_UNIX != AF_LOCAL)
-            SWITCH_CASE_STRCPY_DEFINE(dst, AF_UNIX, 3);
+            SWITCH_CASE_STRCPY_DEFINE(dst, AF_LOCAL, 3);
 #endif
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_PACKET, 3);
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_X25, 3);
             SWITCH_CASE_STRCPY_DEFINE(dst, AF_AX25, 3);
-#else  // _WIN32
-            SWITCH_CASE_STRCPY_DEFINE(dst, AF_LOCAL, 3);
 #endif // _WIN32
 
         default:
