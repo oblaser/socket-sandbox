@@ -36,39 +36,13 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
-#ifdef _WIN32
-
-typedef char sockopt_optval_t;
-typedef int pform_ssize_t;
-
-static void cleanupWinsock();
-
-#else // _WIN32
-
-typedef int sockopt_optval_t;
-typedef ssize_t pform_ssize_t;
-
-#define cleanupWinsock() // nop
-
-#endif // _WIN32
-
-
-
 int main(int argc, char** argv)
 {
     int err;
     char xtosBuffer[100];
 
 #ifdef _WIN32
-
-    { // enable virual terminal mode
-        HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-        if (handle != INVALID_HANDLE_VALUE)
-        {
-            DWORD mode = 0;
-            if (GetConsoleMode(handle, &mode)) { SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING); }
-        }
-    }
+    enableVirtualTerminalProcessing();
 
     WSADATA wsaData;
     err = WSAStartup(0x0202, &wsaData);
@@ -78,7 +52,6 @@ int main(int argc, char** argv)
         cleanupWinsock();
         return EC_ERROR;
     }
-
 #endif // _WIN32
 
     const int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -125,7 +98,7 @@ int main(int argc, char** argv)
         socklen_t addrlen = sizeof(addr);
         char rcvBuffer[4 * 1024];
         char ansBuffer[1024];
-        pform_ssize_t n;
+        ssize_t n;
 
         printf(SGR_BBLACK "waiting for a connection on port %i" SGR_DEFAULT "\n", (int)ntohs(srvaddr.sin_port));
 
@@ -186,58 +159,11 @@ int main(int argc, char** argv)
 #ifdef _WIN32
     err = closesocket(sockfd);
     if (err) { printWSError("closesocket(sockfd) failed", WSAGetLastError()); }
+    cleanupWinsock();
 #else
     err = close(sockfd);
     if (err) { printErrno("close(sockfd) failed", errno); }
 #endif
 
-    cleanupWinsock();
-
     return 0;
 }
-
-
-
-#ifdef _WIN32
-
-void cleanupWinsock()
-{
-    int err;
-
-    err = WSACleanup();
-    if (err)
-    {
-        err = WSAGetLastError();
-
-        switch (err)
-        {
-        case WSANOTINITIALISED:
-            printError("WSACleanup() failed, uninitialised");
-            break;
-
-        case WSAENETDOWN:
-            printError("WSACleanup() failed, network subsystem has failed");
-            break;
-
-        case WSAEINPROGRESS:
-            printError("WSACleanup() failed, in progress");
-            while (err == WSAEINPROGRESS)
-            {
-                err = WSACleanup();
-                if (err)
-                {
-                    err = WSAGetLastError();
-                    Sleep(100);
-                    printf(".");
-                }
-            }
-            printf("\n");
-            break;
-
-        default:
-            break;
-        }
-    }
-}
-
-#endif // _WIN32

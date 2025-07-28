@@ -36,12 +36,24 @@ void printWarning(const char* str) { printf(SGR_BYELLOW "%-*s" SGR_DEFAULT "%s\n
 #pragma comment(lib, "ws2_32.lib")
 #endif // _MSC_VER
 
+
+
+void enableVirtualTerminalProcessing()
+{
+    HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (handle != INVALID_HANDLE_VALUE)
+    {
+        DWORD mode = 0;
+        if (GetConsoleMode(handle, &mode)) { SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING); }
+    }
+}
+
 void printWSError(const char* str, int error)
 {
-    const static char msg[] = "";
+    static const char msg[] = "";
 
-    //const DWORD count = FormatMessageA();
-    //if (count <= 0) { strcpy(msg, "[FormatMessage() failed]"); }
+    // const DWORD count = FormatMessageA();
+    // if (count <= 0) { strcpy(msg, "[FormatMessage() failed]"); }
 
     printf(SGR_BRED "%-*s" SGR_DEFAULT "%s, %i %s\n", ewiWidth, "error:", str, error, msg);
 }

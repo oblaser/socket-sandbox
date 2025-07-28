@@ -35,11 +35,9 @@ C_DECL_BEGIN
 
 
 
-#ifdef _WIN32
+#ifndef _WIN32
 
-typedef USHORT in_port_t;
-
-#else // _WIN32
+typedef int sockopt_optval_t;
 
 /**
  * @brief Extended 802.1Q VLAN ethernet header
@@ -72,6 +70,95 @@ struct arpdata
     uint8_t ar_tpa[ARPDATA_PLEN]; // target protocol address
 } __attribute__((packed));
 
+#else // _WIN32
+
+#include "util/endian.h"
+
+typedef char sockopt_optval_t;
+typedef int ssize_t;
+typedef USHORT in_port_t;
+
+#ifdef _MSC_VER
+#pragma pack(push, 1)
+#endif
+
+struct iphdr
+{
+#if UTIL_BIG_ENDIAN
+    unsigned int version :4;
+    unsigned int ihl     :4;
+#elif UTIL_LITTLE_ENDIAN
+    unsigned int ihl     :4;
+    unsigned int version :4;
+#else
+#error "unknown endianness"
+#endif
+    uint8_t tos;
+    uint16_t tot_len;
+    uint16_t id;
+    uint16_t frag_off;
+    uint8_t ttl;
+    uint8_t protocol;
+    uint16_t check;
+    uint32_t saddr;
+    uint32_t daddr;
+};
+
+struct icmphdr
+{
+    uint8_t type;
+    uint8_t code;
+    uint16_t checksum;
+    union {
+        struct
+        {
+            uint16_t id;
+            uint16_t sequence;
+        } echo;
+        uint32_t gateway;
+        struct
+        {
+            uint16_t __unused;
+            uint16_t mtu;
+        } frag;
+        uint8_t reserved[4];
+    } un;
+};
+
+struct tcphdr
+{
+    uint16_t th_sport;
+    uint16_t th_dport;
+    uint32_t th_seq;
+    uint32_t th_ack;
+#if UTIL_BIG_ENDIAN
+    uint8_t th_off :4;
+    uint8_t th_x2  :4;
+#elif UTIL_LITTLE_ENDIAN
+    uint8_t th_x2  :4;
+    uint8_t th_off :4;
+#else
+#error "unknown endianness"
+#endif
+    uint8_t th_flags;
+    uint16_t th_win;
+    uint16_t th_sum;
+    uint16_t th_urp;
+};
+
+struct udphdr
+{
+    uint16_t uh_sport;
+    uint16_t uh_dport;
+    uint16_t uh_ulen;
+    uint16_t uh_sum;
+};
+
+#ifdef _MSC_VER
+#pragma pack(pop)
+#endif
+
+void cleanupWinsock();
 
 #endif // _WIN32
 

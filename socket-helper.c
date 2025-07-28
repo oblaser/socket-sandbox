@@ -13,6 +13,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 #include "common.h"
 #include "socket-helper.h"
+#include "util/macros.h"
 
 #ifdef _WIN32
 
@@ -64,7 +65,51 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
-#ifndef _WIN32
+#ifdef _WIN32
+
+void cleanupWinsock()
+{
+    int err;
+
+    err = WSACleanup();
+    if (err)
+    {
+        err = WSAGetLastError();
+
+        switch (err)
+        {
+        case WSANOTINITIALISED:
+            printError("WSACleanup() failed, uninitialised");
+            break;
+
+        case WSAENETDOWN:
+            printError("WSACleanup() failed, network subsystem has failed");
+            break;
+
+        case WSAEINPROGRESS:
+            printError("WSACleanup() failed, in progress");
+            while (err == WSAEINPROGRESS)
+            {
+                err = WSACleanup();
+                if (err)
+                {
+                    err = WSAGetLastError();
+                    Sleep(100);
+                    printf(".");
+                }
+            }
+            printf("\n");
+            break;
+
+        default:
+            break;
+        }
+    }
+}
+
+#endif // _WIN32
+
+
 
 struct ippseudohdr* ippseudohdr_init(struct ippseudohdr* dst, const struct iphdr* iphdr)
 {
@@ -90,10 +135,6 @@ struct ippseudohdr* ippseudohdr_init6(struct ippseudohdr* dst, const void* saddr
     fprintf(stderr, SGR_BRED "error:" SGR_DEFAULT " %s is not yet implemented", __func__);
     return NULL;
 }
-
-#endif // _WIN32
-
-
 
 uint16_t inet_checksum(const uint8_t* data, size_t count)
 {
@@ -465,8 +506,6 @@ char* sockaddrtos(const void* sa, char* dst, size_t size)
 
 
 
-#ifndef _WIN32
-
 static void printPacket_padding(const uint8_t* data, size_t size)
 {
     // hex dump padding if it's not all 0
@@ -482,6 +521,8 @@ static void printPacket_padding(const uint8_t* data, size_t size)
         }
     }
 }
+
+#ifndef _WIN32
 
 void printEthHeader(const uint8_t* data, size_t size)
 {
@@ -605,6 +646,8 @@ void printEthPacket(const uint8_t* data, size_t size)
     }
 }
 
+#endif // _WIN32
+
 void printIpHeader(const uint8_t* data, size_t size)
 {
     const struct iphdr* const ipHeader = (const struct iphdr*)(data + 0);
@@ -621,8 +664,8 @@ void printIpHeader(const uint8_t* data, size_t size)
     const uint16_t ipCheck = ntohs(ipHeader->check);
     const uint32_t srcIp = ntohl(ipHeader->saddr);
     const uint32_t dstIp = ntohl(ipHeader->daddr);
-    __attribute__((unused)) const uint8_t* const ipData = data + ipHeaderSize;
-    __attribute__((unused)) const size_t ipDataSize = size - ipHeaderSize;
+    ATTR_UNUSED const uint8_t* const ipData = data + ipHeaderSize;
+    ATTR_UNUSED const size_t ipDataSize = size - ipHeaderSize;
 
     const uint16_t ipCheckCalc = inet_checksum(data, ipHeaderSize);
 
@@ -694,10 +737,10 @@ void printIcmpHeader(const uint8_t* data, size_t size)
     const uint8_t icmpCode = icmpHeader->code;
     const uint16_t icmpCheck = ntohs(icmpHeader->checksum);
     // ...
-    __attribute__((unused)) const uint8_t* const icmpData = data + icmpHeaderSize;
-    __attribute__((unused)) const size_t icmpDataSize = size - icmpHeaderSize;
-    __attribute__((unused)) const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
-    __attribute__((unused)) const size_t padDataSize = size - icmpHeaderSize - icmpDataSize;     // potential padding
+    ATTR_UNUSED const uint8_t* const icmpData = data + icmpHeaderSize;
+    ATTR_UNUSED const size_t icmpDataSize = size - icmpHeaderSize;
+    ATTR_UNUSED const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
+    ATTR_UNUSED const size_t padDataSize = size - icmpHeaderSize - icmpDataSize;     // potential padding
 
     const uint16_t icmpCheckCalc = inet_checksum(data, icmpHeaderSize + icmpDataSize);
 
@@ -750,12 +793,12 @@ void printTcpHeader(const uint8_t* data, size_t size, const struct ippseudohdr* 
     const size_t tcpHeaderSize = tcpDataOff * 4u;
     const uint8_t tcpFlags = tcpHeader->th_flags;
     // ...
-    const uint16_t tcpCheck = ntohs(tcpHeader->check);
+    const uint16_t tcpCheck = ntohs(tcpHeader->th_sum);
     // ...
-    __attribute__((unused)) const uint8_t* const tcpData = data + tcpHeaderSize;
-    __attribute__((unused)) const size_t tcpDataSize = size - tcpHeaderSize;
-    __attribute__((unused)) const uint8_t* const padData = data + tcpHeaderSize + tcpDataSize; // potential padding
-    __attribute__((unused)) const size_t padDataSize = size - tcpHeaderSize - tcpDataSize;     // potential padding
+    ATTR_UNUSED const uint8_t* const tcpData = data + tcpHeaderSize;
+    ATTR_UNUSED const size_t tcpDataSize = size - tcpHeaderSize;
+    ATTR_UNUSED const uint8_t* const padData = data + tcpHeaderSize + tcpDataSize; // potential padding
+    ATTR_UNUSED const size_t padDataSize = size - tcpHeaderSize - tcpDataSize;     // potential padding
 
     uint16_t tcpCheckCalc;
     if (pseudoHdr)
@@ -816,10 +859,10 @@ void printUdpHeader(const uint8_t* data, size_t size, const struct ippseudohdr* 
     const uint16_t dstPort = ntohs(udpHeader->uh_dport);
     const uint16_t udpLength = ntohs(udpHeader->uh_ulen);
     const uint16_t udpCheck = ntohs(udpHeader->uh_sum);
-    __attribute__((unused)) const uint8_t* const udpData = data + udpHeaderSize;
-    __attribute__((unused)) const size_t udpDataSize = udpLength - udpHeaderSize;
-    __attribute__((unused)) const uint8_t* const padData = data + udpHeaderSize + udpDataSize; // potential padding
-    __attribute__((unused)) const size_t padDataSize = size - udpHeaderSize - udpDataSize;     // potential padding
+    ATTR_UNUSED const uint8_t* const udpData = data + udpHeaderSize;
+    ATTR_UNUSED const size_t udpDataSize = udpLength - udpHeaderSize;
+    ATTR_UNUSED const uint8_t* const padData = data + udpHeaderSize + udpDataSize; // potential padding
+    ATTR_UNUSED const size_t padDataSize = size - udpHeaderSize - udpDataSize;     // potential padding
 
     uint16_t udpCheckCalc;
     if (pseudoHdr)
@@ -870,8 +913,6 @@ void printUdpPacket(const uint8_t* data, size_t size, const struct ippseudohdr* 
     printPacket_padding(padData, padDataSize);
 }
 
-#endif // _WIN32
-
 
 
 /**
@@ -889,9 +930,8 @@ static void hexDump_dataToString(char* buffer, const uint8_t* p, const uint8_t* 
 
     while ((i < 16) && (p < end))
     {
-        const char c = (char)(*p);
 
-        if (isprint(c)) { buffer[i] = c; }
+        if (isprint(*p)) { buffer[i] = (char)(*p); }
         else { buffer[i] = '.'; }
 
         ++p;

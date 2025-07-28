@@ -61,17 +61,9 @@ void printErrno(const char* str, int eno);
 void printWarning(const char* str);
 
 #ifdef _WIN32
+void enableVirtualTerminalProcessing();
 void printWSError(const char* str, int error);
 #endif
-
-
-
-
-
-
-
-
-
 
 
 
