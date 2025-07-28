@@ -85,11 +85,11 @@ typedef USHORT in_port_t;
 struct iphdr
 {
 #if UTIL_BIG_ENDIAN
-    unsigned int version :4;
-    unsigned int ihl     :4;
+    uint8_t version :4;
+    uint8_t ihl     :4;
 #elif UTIL_LITTLE_ENDIAN
-    unsigned int ihl     :4;
-    unsigned int version :4;
+    uint8_t ihl     :4;
+    uint8_t version :4;
 #else
 #error "unknown endianness"
 #endif
