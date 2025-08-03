@@ -169,6 +169,10 @@ int main(int argc, char** argv)
                 false // (closing global)
             )
             {
+#if 0
+                if ((ethHeader->h_source[0] == 0xb8) && (ethHeader->h_source[1] == 0xd8) && (ethHeader->h_source[2] == 0x12)) { continue; }
+#endif
+
                 printf("\n" SGR_BLUE "  --=====| " SGR_BBLUE " %s " SGR_BLUE " |=====--" SGR_DEFAULT "\n",
                        sockaddrtos(&sockSrcAddr, xtosBuffer, sizeof(xtosBuffer)));
 
@@ -182,7 +186,7 @@ int main(int argc, char** argv)
                 printEthPacket(sockData, sockDataSize);
             }
         }
-    }
+    } // while (1)
 
     const int err = close(sockfd);
     if (err) { printErrno("close() failed", errno); }
