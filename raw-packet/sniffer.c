@@ -69,7 +69,7 @@ int main(int argc, char** argv)
 
 
 
-    const int sockfd = socket(AF_PACKET, SOCK_RAW, htons(filterEthProtocol));
+    const int sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (sockfd < 0)
     {
         printErrno("failed to create socket", errno);
@@ -162,9 +162,10 @@ int main(int argc, char** argv)
 
 
             // filter
-            if ((1 && 0) || 0 ||                                                 // global enable/disable filter
-                ((filterIpProtocol != 0) && (ipProtocol == filterIpProtocol)) || // IP protocol filter
-                //(!checksumOk) ||                                                 // checksum filter
+            if ((1 && 0) || 0 ||                                                            // global enable/disable filter
+                ((filterEthProtocol != ETH_P_ALL) && (ethProtocol == filterEthProtocol)) || // ETH protocol filter
+                ((filterIpProtocol != 0) && (ipProtocol == filterIpProtocol)) ||            // IP protocol filter
+                //(!checksumOk) ||                                               // checksum filter
                 false // (closing global)
             )
             {
