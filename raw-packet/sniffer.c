@@ -27,6 +27,10 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
+typedef _Bool bool_t;
+
+
+
 int main(int argc, char** argv)
 {
     char xtosBuffer[100];
@@ -116,7 +120,7 @@ int main(int argc, char** argv)
             __attribute__((unused)) uint16_t dstPort = 0;
             __attribute__((unused)) uint8_t icmpType;
 
-            __attribute__((unused)) bool checksumOk = true;
+            __attribute__((unused)) bool_t checksumOk = true;
             if (ipCheckCalc != 0) { checksumOk = false; }
 
             if (ipProtocol == IPPROTO_TCP)
