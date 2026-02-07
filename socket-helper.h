@@ -35,6 +35,14 @@ C_DECL_BEGIN
 
 
 
+#ifdef _WIN64 // Windows x64
+typedef long long sockfd_t;
+#else // Windows x86 and *nix
+typedef int sockfd_t;
+#endif
+
+
+
 #ifndef _WIN32
 
 typedef int sockopt_optval_t;

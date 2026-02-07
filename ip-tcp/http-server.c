@@ -1,7 +1,7 @@
 /*
 author          Oliver Blaser
-date            05.06.2025
-copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
+date            07.02.2026
+copyright       GPL-3.0 - Copyright (c) 2026 Oliver Blaser
 */
 
 #include <errno.h>
@@ -17,7 +17,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 #include <io.h>
 #include <sys/types.h>
-#include <winsock2.h>
+#include <WinSock2.h>
 #include <WS2tcpip.h>
 
 #include <Windows.h>
@@ -54,16 +54,27 @@ int main(int argc, char** argv)
     }
 #endif // _WIN32
 
-    const int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    const sockfd_t sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
     {
-        printErrno("socket() failed", errno);
+#ifdef _WIN32
+        printWSError("socket() failed", WSAGetLastError());
         cleanupWinsock();
+#else
+        printErrno("socket() failed", errno);
+#endif
         return EC_SOCK;
     }
 
     err = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(sockopt_optval_t){ 1 }, sizeof(int));
-    if (err) { printErrno("setsockopt(SO_REUSEADDR) failed", errno); }
+    if (err)
+    {
+#ifdef _WIN32
+        printWSError("setsockopt(SO_REUSEADDR) failed", WSAGetLastError());
+#else
+        printErrno("setsockopt(SO_REUSEADDR) failed", errno);
+#endif
+    }
 
     struct sockaddr_in srvaddr;
     memset(&srvaddr, 0, sizeof(srvaddr));
@@ -75,18 +86,28 @@ int main(int argc, char** argv)
     err = bind(sockfd, (struct sockaddr*)(&srvaddr), sizeof(srvaddr));
     if (err)
     {
+#ifdef _WIN32
+        printWSError("bind() failed", WSAGetLastError());
+        closesocket(sockfd);
+        cleanupWinsock();
+#else
         printErrno("bind() failed", errno);
         close(sockfd);
-        cleanupWinsock();
+#endif
         return EC_BIND;
     }
 
     err = listen(sockfd, 3);
     if (err)
     {
+#ifdef _WIN32
+        printWSError("listen() failed", WSAGetLastError());
+        closesocket(sockfd);
+        cleanupWinsock();
+#else
         printErrno("listen() failed", errno);
         close(sockfd);
-        cleanupWinsock();
+#endif
         return EC_LISTEN;
     }
 
@@ -102,7 +123,7 @@ int main(int argc, char** argv)
 
         printf(SGR_BBLACK "waiting for a connection on port %i" SGR_DEFAULT "\n", (int)ntohs(srvaddr.sin_port));
 
-        const int connfd = accept(sockfd, (struct sockaddr*)(&addr), &addrlen);
+        const sockfd_t connfd = accept(sockfd, (struct sockaddr*)(&addr), &addrlen);
         if (connfd < 0)
         {
 #ifdef _WIN32
@@ -121,9 +142,15 @@ int main(int argc, char** argv)
         n = recv(connfd, rcvBuffer, sizeof(rcvBuffer), 0);
         if (n < 0)
         {
-            printErrno("read() failed", errno);
+#ifdef _WIN32
+            printWSError("recv() failed", WSAGetLastError());
+            err = closesocket(connfd);
+            if (err) { printWSError("closesocket(connfd) failed", WSAGetLastError()); }
+#else
+            printErrno("recv() failed", errno);
             err = close(connfd);
             if (err) { printErrno("close(connfd) failed", errno); }
+#endif
             continue;
         }
 
@@ -144,7 +171,14 @@ int main(int argc, char** argv)
         strcat(ansBuffer, sockaddrtos(&addr, xtosBuffer, sizeof(xtosBuffer)));
 
         n = send(connfd, ansBuffer, strlen(ansBuffer), 0);
-        if (n < 0) { printErrno("write() failed", errno); }
+        if (n < 0)
+        {
+#ifdef _WIN32
+            printWSError("send() failed", WSAGetLastError());
+#else
+            printErrno("send() failed", errno);
+#endif
+        }
         else if (n != strlen(ansBuffer)) { printWarning("failed to write the whole answer"); }
 
 #ifdef _WIN32
