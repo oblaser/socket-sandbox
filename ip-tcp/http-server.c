@@ -165,10 +165,14 @@ int main(int argc, char** argv)
 
 
 
-        strcpy(ansBuffer, "HTTP/1.0 200 OK\r\n\r\n");
+        strcpy(ansBuffer, "HTTP/1.0 200 OK\r\n");
+        strcat(ansBuffer, "Content-Type: text/html; charset=utf-8\r\n");
+        strcat(ansBuffer, "\r\n");
+        strcat(ansBuffer, "<html><head></head><body>");
         strcat(ansBuffer, "<h3>Hello World!</h3>");
         strcat(ansBuffer, "Your IP address is ");
         strcat(ansBuffer, sockaddrtos(&addr, xtosBuffer, sizeof(xtosBuffer)));
+        strcat(ansBuffer, "</body></html>");
 
         n = send(connfd, ansBuffer, strlen(ansBuffer), 0);
         if (n < 0)
